@@ -22,5 +22,6 @@
             "agent": "agent:MINDAgent",
             "planner_config": "planners/mind/configs/demo_3.json"
         }
-    ]
+    ],
+    "use_cuda": false
 }

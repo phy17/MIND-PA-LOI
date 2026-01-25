@@ -54,8 +54,8 @@ class TrajectoryTreeOptimizer:
                 queue.append(scen_tree.get_node(child_key))
 
         self.cost_tree = TreeCost(cost_tree, self.config.state_size, self.config.action_size)
-
-    def init_cost_tree(self, scen_tree: Tree, init_state, init_ctrl, target_lane, target_vel):
+    #注意这里是计算风险的地方
+    def init_cost_tree(self, scen_tree: Tree, init_state, init_ctrl, target_lane, target_vel, risk_sources=None):
         x0 = self._get_init_state(init_state, init_ctrl)
         res = self.config.opt_cfg['smooth_grid_res']
         grid_size = self.config.opt_cfg['smooth_grid_size']
@@ -94,12 +94,54 @@ class TrajectoryTreeOptimizer:
 
                 for exo_idx in range(1, trajs.shape[0]):
                     exo_mean = trajs[exo_idx, i]
+                    #这里是增加了对于障碍物的距离权重
+                    # --- [Innovation] Distance-Adaptive Weighting ---
+                    # Calculate distance between ego and this obstacle
+                    dist_to_obj = np.linalg.norm(ego_mean[:2] - exo_mean[:2])
+                    # Higher weight for closer objects.
+                    # Base weight 1.0 + Extra weight that decays exponentially with distance
+                    # Parameters: 10.0 is max extra gain, 0.3 controls how fast it decays
+                    w_dist = 1.0 + 10.0 * np.exp(-0.3 * dist_to_obj)
+                    # -----------------------------------------------
+
                     exo_cov = covs[exo_idx, i] + self.config.opt_cfg['w_exo_cov_offset']
                     exo_dis_field = (exo_cov - get_point_mean_distances(centroids, exo_mean)).reshape(
                         cov_dist_field.shape)
                     exo_dis_field = np.maximum(exo_dis_field, 0.0)
                     exo_dis_field[exo_dis_field > 0] += self.config.opt_cfg['w_exo_cost_offset']
-                    cov_dist_field += exo_dis_field
+
+                    # 将近距离的障碍的危险权重加大
+                    cov_dist_field += exo_dis_field * w_dist
+
+                # --- Inject Semantic Risk Sources (Ghost Probes) ---
+                if risk_sources:
+                     for risk in risk_sources:
+                         # risk['pos']: tensor [2] on device
+                         # risk['cov']: tensor [2,2] on device (sigma^2 on diagonal)
+                         
+                         risk_mean = risk['pos'].cpu().numpy()
+                         
+                         # Use the variance (radius^2) as the 'size' of the obstacle
+                         # In this potential field formulation, 'exo_cov' acts as the squared influence radius
+                         risk_radius_sq = risk['cov'][0, 0].item() # sigma^2
+                         
+                         # Compute distance from all grid points to risk center
+                         # get_point_mean_distances returns squared distance? need to verify simple logic
+                         # Assuming get_point_mean_distances matches the dimension of 'exo_cov'
+                         
+                         # Construct the field: (Radius - Distance) > 0 inside danger zone
+                         risk_field = (risk_radius_sq - get_point_mean_distances(centroids, risk_mean)).reshape(cov_dist_field.shape)
+                         risk_field = np.maximum(risk_field, 0.0)
+                         
+                         # If in danger zone, add strict penalty
+                         # risk['weight'] is e.g. 10.0.
+                         if np.any(risk_field > 0):
+                             risk_field[risk_field > 0] += 1.0 # 降低 Base offset，使梯度更平滑
+                             
+                             # Boost weight significantly
+                             w_risk = risk['weight'] 
+                             cov_dist_field += risk_field * w_risk
+                # ---------------------------------------------------
 
                 quad_cost_field = (self.config.opt_cfg['w_tgt'] * prob * quad_dist_field +
                                    self.config.opt_cfg['w_exo'] * cov_dist_field +

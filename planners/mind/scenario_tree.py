@@ -54,7 +54,11 @@ class ScenarioTreeGenerator:
             # Update Branch Set
             branch_nodes = self.get_branch_set()
 
-        assert len(self.get_end_set()) > 0, "No end node found in the scenario tree."
+        # 如果没有找到结束节点，返回空列表而不是崩溃
+        # 这可能发生在所有预测分支都被剪枝的极端情况
+        if len(self.get_end_set()) == 0:
+            print("[WARNING] No end node found in scenario tree, returning empty tree.")
+            return []
         return self.get_scenario_tree()
 
     def init_scenario_tree(self, data):
@@ -365,8 +369,11 @@ class ScenarioTreeGenerator:
                 cur_data['TRAJS_VEL_HIST'] = trajs_vel_hist_new
                 cur_data['TGT_PTS'] = data['TGT_PTS'][idx]
 
-                # prune if the scene is not likely
-                if cur_data["SCEN_PROB"] < 0.001:
+                # prune if the scene is not likely, UNLESS it involves high risk (Ghost Probe)
+                # "Ghost Probe" logic: Low Probability but High Loss (Risk)
+                is_high_risk = self.calculate_risk_score(cur_data['TRAJS_POS_HIST'], self.ego_idx, dist_thresh=1.5)
+                
+                if cur_data["SCEN_PROB"] < 0.001 and not is_high_risk:
                     continue
 
                 # prune if the ego decision is not likely to follow the target lane
@@ -410,6 +417,38 @@ class ScenarioTreeGenerator:
             data_interact += selected_data
 
         return data_interact
+
+    def calculate_risk_score(self, trajs_pos, ego_idx=0, dist_thresh=2.0):
+        """
+        Calculate if the scenario presents a high risk (collision proximity).
+        Returns True if min distance between Ego and any other agent is less than dist_thresh.
+        """
+        # trajs_pos: [N_agents, T, 2]
+        if len(trajs_pos) <= 1:
+            return False
+
+        # Ego trajectory [T, 2]
+        ego_traj = trajs_pos[ego_idx]
+        
+        # Other agents [N-1, T, 2]
+        # We need to handle the case where ego_idx is not 0, although practically it is.
+        # Assuming ego_idx is 0 for simplicity as per initialization.
+        others_traj = trajs_pos[1:] 
+
+        if len(others_traj) == 0:
+            return False
+
+        # Calculate distances: [N-1, T]
+        dists = torch.norm(others_traj - ego_traj.unsqueeze(0), dim=-1)
+        
+        # Check strict collision
+        min_dist = torch.min(dists)
+        
+        # If any object comes dangerously close, flag as High Risk
+        if min_dist < dist_thresh:
+            return True
+        
+        return False
 
     def prepare_root_data(self, data):
         batch_size = len(data['ORIG'])

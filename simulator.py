@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-from common.visualization import draw_map, draw_agent, draw_scen_trees, reset_ax, draw_traj_trees, draw_traj
+from common.visualization import draw_map, draw_agent, draw_scen_trees, reset_ax, draw_traj_trees, draw_traj, draw_ghost_points
 
 from agent import CustomizedAgent, NonReactiveAgent
 from loader import ArgoAgentLoader
@@ -92,6 +92,9 @@ class Simulator:
                             if agent.id == 'AV':
                                 frame['scen_tree'] = res[0]
                                 frame['traj_tree'] = res[1]
+                                # 保存鬼探头点用于可视化
+                                if len(res) > 2:
+                                    frame['ghost_points'] = res[2]
 
                 elif isinstance(agent, NonReactiveAgent):
                     agent.step()
@@ -118,18 +121,19 @@ class Simulator:
         if not os.path.exists(img_dir):
             os.makedirs(img_dir)
 
-        # output frame png multiprocessing use the spawn method to create a new process
-        ctx = torch.multiprocessing.get_context('spawn')
-        pool = ctx.Pool(self.num_threads)
-        pool.starmap(self.render_png, [(frame_idx, img_dir) for frame_idx in range(len(self.frames))])
-        pool.close()
+        # Single-threaded rendering to avoid macOS multiprocessing issues
+        from tqdm import tqdm
+        for frame_idx in tqdm(range(len(self.frames)), desc="Rendering frames"):
+            self.render_png(frame_idx, img_dir)
 
         # call ffmpeg to combine images into a video
         video_name = f'{self.seq_id}_{self.sim_name}.mov'
         output_command = "ffmpeg -r 25 -i " + img_dir + f'/frame_%03d.png' + " -vcodec mpeg4 -y " + \
                          self.output_dir + video_name
         os.system(output_command)
-        shutil.rmtree(img_dir)
+        # Keep the images for comparison (disabled deletion)
+        # shutil.rmtree(img_dir)
+        print(f"Images saved to: {img_dir}")
 
     ########################################
     # Visualization functions
@@ -144,7 +148,7 @@ class Simulator:
         plt.tight_layout()
         plt.savefig(frame_filename)
         plt.close(fig)
-
+#这个函数负责画图
     def render_frame(self, frame_idx, ax):
         scen_tree_vis = None
         traj_tree_vis = None
@@ -174,11 +178,25 @@ class Simulator:
         reset_ax(ax)
 
         # Process the frame
-        center = np.array([0, 0])
-        center[0] = self.config['render_config']['camera_position']['x']
-        center[1] = self.config['render_config']['camera_position']['y']
+        center = np.array([0.0, 0.0])
         cam_yaw = self.config['render_config']['camera_position']['yaw']
         elev = self.config['render_config']['camera_position']['elev']
+
+        # Handle 'follow' mode
+        if self.config['render_config'].get('mode') == 'follow':
+            # Find AV agent
+            for agent in self.frames[frame_idx]['agents']:
+                if agent.id == 'AV':  # Assuming AV ID is always 'AV'
+                    center[0] = agent.state[0]
+                    center[1] = agent.state[1]
+                    # Optional: Lock yaw to agent heading
+                    # cam_yaw = agent.state[3]
+                    break
+        else:
+            # Fixed mode
+            center[0] = self.config['render_config']['camera_position']['x']
+            center[1] = self.config['render_config']['camera_position']['y']
+
         ax.set_xlim([center[0] - range_3d, center[0] + range_3d])
         ax.set_ylim([center[1] - range_3d, center[1] + range_3d])
         ax.set_zlim([0, 2 * range_3d])
@@ -189,6 +207,21 @@ class Simulator:
             draw_scen_trees(ax, scen_tree_vis)
         if traj_tree_vis is not None:
             draw_traj_trees(ax, traj_tree_vis)
+        
+        # 绘制鬼探头危险区域
+        ghost_points_vis = None
+        if 'ghost_points' in self.frames[frame_idx]:
+            ghost_points_vis = self.frames[frame_idx]['ghost_points']
+        else:
+            # 从之前的帧获取
+            pre_frame_idx = frame_idx - 1
+            while pre_frame_idx >= 0 and 'ghost_points' not in self.frames[pre_frame_idx]:
+                pre_frame_idx -= 1
+            if pre_frame_idx >= 0 and 'ghost_points' in self.frames[pre_frame_idx]:
+                ghost_points_vis = self.frames[pre_frame_idx]['ghost_points']
+        
+        if ghost_points_vis is not None and len(ghost_points_vis) > 0:
+            draw_ghost_points(ax, ghost_points_vis)
 
         #  plot agents
         for agent in self.frames[frame_idx]['agents']:

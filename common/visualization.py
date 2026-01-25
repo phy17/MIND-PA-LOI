@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Ellipse
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Polygon, MultiPoint
 from shapely.ops import unary_union
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from common.geometry import get_vehicle_vertices
@@ -28,7 +28,7 @@ def circle_to_convex_polygon(circle, resolution=100):
             circle.center[1] + circle.radius * np.sin(t[i])
         ] for i in range(len(t))
     ]
-    return Polygon(points).convex_hull
+    return MultiPoint(points).convex_hull
 
 
 def reset_ax(ax):
@@ -247,7 +247,7 @@ def draw_scen_trees(ax, scen_trees):  # convert vis data to local frame
                 for iii in range(len(polygons) - 1):
                     convex_polygons.append(polygons[iii].union(polygons[iii + 1]).convex_hull)
 
-                tree_traj.append(unary_union(convex_polygons).exterior.xy)
+                tree_traj.append(unary_union(convex_polygons).convex_hull.exterior.xy)
         tree_trajs.append(tree_traj)
     for traj in tree_trajs[0]:
         traj = np.array(traj)
@@ -292,3 +292,39 @@ def draw_traj(ax, traj, width=0.5, clr='mediumpurple'):
             continue
         verts_3d = [list(zip(verts[0], verts[1], np.full_like(verts[0], z_offset)))]
         ax.add_collection3d(Poly3DCollection(verts_3d, alpha=alpha, facecolors=clr, edgecolors=None))
+
+
+def draw_ghost_points(ax, ghost_points, z=0.15):
+    """
+    绘制鬼探头危险区域（红色圆圈）。
+    
+    Args:
+        ax: matplotlib 3D axis
+        ghost_points: list of dicts with 'pos' (numpy array [2]) and 'cov' (numpy array [2,2])
+        z: z-height for rendering
+    """
+    for ghost in ghost_points:
+        # 获取位置和半径
+        if isinstance(ghost['pos'], torch.Tensor):
+            pos = ghost['pos'].cpu().numpy()
+        else:
+            pos = ghost['pos']
+            
+        if isinstance(ghost['cov'], torch.Tensor):
+            radius = np.sqrt(ghost['cov'][0, 0].cpu().numpy())
+        else:
+            radius = np.sqrt(ghost['cov'][0, 0])
+        
+        # 绘制红色圆形区域
+        theta = np.linspace(0, 2 * np.pi, 32)
+        x = pos[0] + radius * np.cos(theta)
+        y = pos[1] + radius * np.sin(theta)
+        z_arr = np.full_like(x, z)
+        
+        # 填充圆形
+        verts = [list(zip(x, y, z_arr))]
+        poly = Poly3DCollection(verts, alpha=0.5, facecolors='red', edgecolors='darkred', linewidths=2)
+        ax.add_collection3d(poly)
+        
+        # 添加警告标记 (中心点)
+        ax.scatter([pos[0]], [pos[1]], [z + 0.1], c='red', s=100, marker='x', linewidths=3)

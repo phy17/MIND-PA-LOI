@@ -6,6 +6,7 @@ from importlib import import_module
 from common.geometry import project_point_on_polyline
 from planners.mind.scenario_tree import ScenarioTreeGenerator
 from planners.mind.trajectory_tree import TrajectoryTreeOptimizer
+from planners.mind.utils import get_agent_trajectories, get_semantic_risk_sources
 from av2.datasets.motion_forecasting.data_schema import Track, ObjectState, TrackCategory, ObjectType
 
 
@@ -112,13 +113,22 @@ class MINDPlanner:
 
         scen_trees = self.scen_tree_gen.branch_aime(lcl_smp, self.agent_obs)
 
-        if len(scen_trees) < 0:
+        if len(scen_trees) <= 0:
             return False, None, None
+            
+        # --- Semantic Risk Source Identification (MARC-based Ghost Probe Defense) ---
+        trajs_pos, trajs_ang, trajs_vel, trajs_type, _, _, _ = get_agent_trajectories(self.agent_obs, self.device)
+        # Ego 当前位置和朝向 (index 0 是 Ego，最后一帧是当前时刻)
+        ego_pos = trajs_pos[0, -1]
+        ego_heading = trajs_ang[0, -1]
+        risk_sources = get_semantic_risk_sources(trajs_pos, trajs_vel, trajs_type, trajs_ang, 
+                                                  ego_pos=ego_pos, ego_heading=ego_heading, device=self.device)
+        # --------------------------------------------------------------------------
 
         traj_trees = []
         debug_info = []
         for scen_tree in scen_trees:
-            traj_tree, debug = self.get_traj_tree(scen_tree, lcl_smp)
+            traj_tree, debug = self.get_traj_tree(scen_tree, lcl_smp, risk_sources)
             traj_trees.append(traj_tree)
             debug_info.append(debug)
 
@@ -133,7 +143,7 @@ class MINDPlanner:
         best_traj_idx = None
         min_cost = np.inf
         for idx, traj_tree in enumerate(traj_trees):
-            cost = self.evaluate_traj_tree(lcl_smp, traj_tree)
+            cost = self.evaluate_traj_tree(lcl_smp, traj_tree, risk_sources)
             if cost < min_cost:
                 min_cost = cost
                 best_traj_idx = idx
@@ -142,7 +152,8 @@ class MINDPlanner:
         next_node = opt_traj_tree.get_node(opt_traj_tree.get_root().children_keys[0])
         ret_ctrl = next_node.data[0][-2:]
 
-        return True, ret_ctrl, [[scen_trees[best_traj_idx]], [traj_trees[best_traj_idx]]]
+        # 返回结果中包含 risk_sources 用于可视化
+        return True, ret_ctrl, [[scen_trees[best_traj_idx]], [traj_trees[best_traj_idx]], risk_sources]
 
     def resample_target_lane(self, lcl_smp):
         # resample the lcl_smp target_lane and info with 1.0m interval
@@ -171,13 +182,13 @@ class MINDPlanner:
         return resample_target_lane, resample_target_lane_info
 
 
-    def get_traj_tree(self, scen_tree, lcl_smp):
+    def get_traj_tree(self, scen_tree, lcl_smp, risk_sources=None):
         self.traj_tree_opt.init_warm_start_cost_tree(scen_tree, self.state, self.ctrl, self.gt_tgt_lane, lcl_smp.target_velocity)
         xs, us = self.traj_tree_opt.warm_start_solve()
-        self.traj_tree_opt.init_cost_tree(scen_tree, self.state, self.ctrl, self.gt_tgt_lane, lcl_smp.target_velocity)
+        self.traj_tree_opt.init_cost_tree(scen_tree, self.state, self.ctrl, self.gt_tgt_lane, lcl_smp.target_velocity, risk_sources)
         return self.traj_tree_opt.solve(us), self.traj_tree_opt.debug
 
-    def evaluate_traj_tree(self, lcl_smp, traj_tree):
+    def evaluate_traj_tree(self, lcl_smp, traj_tree, risk_sources=None):
         # we use cost function here, instead of the reward function in the paper, but reward functions can work as well
         # simplified cost function
         comfort_acc_weight = .1
@@ -187,6 +198,10 @@ class MINDPlanner:
         efficiency_cost = 0.0
         target_weight = .01
         target_cost = 0.0
+        
+        # Risk Cost Weights
+        risk_weight_base = 1.0
+        
         n_nodes = len(traj_tree.nodes)
         for node in traj_tree.nodes.values():
             state = node.data[0]
@@ -195,6 +210,42 @@ class MINDPlanner:
             comfort_cost += comfort_str_weight * ctrl[1] ** 2
             efficiency_cost += efficiency_weight * (lcl_smp.target_velocity - state[2]) ** 2
             target_cost += target_weight * self.get_dist_to_target_lane(lcl_smp, state)
+            
+            # --- Calculate Risk Cost (Ghost Probe) ---
+            if risk_sources:
+                ego_pos = torch.tensor(state[:2], device=self.device)
+                ego_vel = state[2] # scalar
+                
+                for risk in risk_sources:
+                    # risk['pos'] is [2] tensor, risk['cov'] is [2, 2] tensor
+                    # Mahalanobis distance d_m = sqrt((x-mu)^T Sigma^-1 (x-mu))
+                    
+                    diff = ego_pos - risk['pos']
+                    # Use inverse of covariance. Since cov is diagonal [[sigma^2, 0], [0, sigma^2]]
+                    # Sigma^-1 is [[1/sigma^2, 0], [0, 1/sigma^2]]
+                    # d_m^2 = diff^T * Sigma^-1 * diff
+                    # Efficient calculation since diagonal
+                    sigma_sq = risk['cov'][0, 0] # Assuming isotropic
+                    mahalanobis_sq = torch.dot(diff, diff) / sigma_sq
+                    mahalanobis_dist = torch.sqrt(mahalanobis_sq)
+                    
+                    # Safety Boundary (e.g., 3 sigma = 3 meters approx if sigma=1)
+                    # Cost = exp( (Safety_Bnd - d_m) ) * Velocity * Weight
+                    safety_bnd = 2.0 
+                    
+                    if mahalanobis_dist < safety_bnd:
+                         # Exponential barrier
+                         risk_cost_val = torch.exp(safety_bnd - mahalanobis_dist) * risk['weight']
+                         # Velocity coupling: More dangerous if fast
+                         risk_cost_val *= (ego_vel + 0.1) # Add epsilon to ensure even low speed gets some penalty if too close
+                         
+                         # Add to efficiency cost or a separate risk term?
+                         # Adding to efficiency/comfort might obscure it. Let's add it directly to total cost.
+                         # Since return is sum, we just add it to one of them or make new accumulator
+                         # Let's add to target_cost for now or create risk_cost variable
+                         target_cost += risk_cost_val.item() # Assuming risk_cost_val is tensor
+            # ----------------------------------------
+            
         return (comfort_cost + efficiency_cost + target_cost) / n_nodes
 
     def get_dist_to_target_lane(self, lcl_smp, state):

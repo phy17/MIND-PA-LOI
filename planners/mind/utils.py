@@ -332,14 +332,83 @@ def get_agent_trajectories(agent_obs, device):
         trajs_tid.append(sorted_tid[k])
         trajs_cat.append(sorted_cat[k])
 
+    
     trajs_pos = np.array(trajs_pos).astype(np.float32)  # [N, 110(50), 2]
     trajs_ang = np.array(trajs_ang).astype(np.float32)  # [N, 110(50)]
     trajs_vel = np.array(trajs_vel).astype(np.float32)  # [N, 110(50), 2]
     trajs_type = np.array(trajs_type).astype(np.int16)  # [N, 110(50), 7]
     has_flags = np.array(has_flags).astype(np.int16)  # [N, 110(50)]
-    return (torch.from_numpy(trajs_pos).to(device), torch.from_numpy(trajs_ang).to(device),
-            torch.from_numpy(trajs_vel).to(device), torch.from_numpy(trajs_type).to(device),
-            torch.from_numpy(has_flags).to(device), trajs_tid, trajs_cat)
+    
+    # Convert to Tensor first
+    trajs_pos = torch.from_numpy(trajs_pos).to(device)
+    trajs_ang = torch.from_numpy(trajs_ang).to(device)
+    trajs_vel = torch.from_numpy(trajs_vel).to(device)
+    trajs_type = torch.from_numpy(trajs_type).to(device)
+    has_flags = torch.from_numpy(has_flags).to(device)
+
+    # --- GHOST PROBE SCENARIO INJECTION (Position-based trigger) ---
+    # 只在 Demo 2 的特定区域触发（基于 Ego 位置）
+    # 固定位置：大巴停在 (3100, 1520)，行人从 (3102, 1528) 开始横穿
+    
+    # 获取 Ego 当前位置
+    ego_pos_cur = trajs_pos[0, -1]
+    ego_ang_cur = trajs_ang[0, -1]
+    
+    # 触发条件：Ego 接近目标区域 (x > 3050)
+    # 这样只有在 Demo 2 场景中才会触发
+    TRIGGER_X_MIN = 3050.0
+    TRIGGER_X_MAX = 3150.0
+    
+    if TRIGGER_X_MIN < ego_pos_cur[0].item() < TRIGGER_X_MAX:
+        print(f"[GHOST PROBE] Injecting fake agents at Ego position: {ego_pos_cur.cpu().numpy()}")
+        
+        # 1. Fake Bus (Static, Occluder)
+        # 固定全局坐标
+        bus_pos = torch.tensor([3100.0, 1518.0], device=device, dtype=torch.float32)
+        bus_ang = torch.tensor(0.7, device=device)  # 大约 40 度朝向
+        
+        bus_traj_pos = bus_pos.unsqueeze(0).unsqueeze(0).repeat(1, obs_len, 1)
+        bus_traj_ang = torch.full((1, obs_len), bus_ang, device=device)
+        bus_traj_vel = torch.zeros((1, obs_len, 2), device=device)
+        
+        bus_traj_type = torch.zeros((1, obs_len, 7), device=device, dtype=torch.int16)
+        bus_traj_type[:, :, 4] = 1  # Bus type
+        
+        bus_has_flag = torch.ones((1, obs_len), device=device, dtype=torch.int16)
+        
+        # 2. Fake Pedestrian (Dynamic)
+        # 从大巴后面冲出来，横穿马路
+        ped_pos_current = torch.tensor([3102.0, 1522.0], device=device, dtype=torch.float32)
+        ped_vel = torch.tensor([0.0, 2.0], device=device, dtype=torch.float32)  # 2 m/s 向 +Y 方向
+        
+        # 构造历史轨迹（往回推算）
+        dt = 0.1
+        ped_traj_pos_list = []
+        for t in range(obs_len):
+            time_diff = (obs_len - 1 - t) * dt
+            p_t = ped_pos_current - ped_vel * time_diff
+            ped_traj_pos_list.append(p_t)
+        
+        ped_traj_pos = torch.stack(ped_traj_pos_list).unsqueeze(0)  # [1, 50, 2]
+        ped_traj_ang = torch.full((1, obs_len), 1.57, device=device)  # 朝向 +Y
+        ped_traj_vel = ped_vel.unsqueeze(0).unsqueeze(0).repeat(1, obs_len, 1)
+        
+        ped_traj_type = torch.zeros((1, obs_len, 7), device=device, dtype=torch.int16)
+        ped_traj_type[:, :, 1] = 1  # Pedestrian type
+        
+        ped_has_flag = torch.ones((1, obs_len), device=device, dtype=torch.int16)
+        
+        # Concatenate
+        trajs_pos = torch.cat([trajs_pos, bus_traj_pos, ped_traj_pos], dim=0)
+        trajs_ang = torch.cat([trajs_ang, bus_traj_ang, ped_traj_ang], dim=0)
+        trajs_vel = torch.cat([trajs_vel, bus_traj_vel, ped_traj_vel], dim=0)
+        trajs_type = torch.cat([trajs_type, bus_traj_type, ped_traj_type], dim=0)
+        has_flags = torch.cat([has_flags, bus_has_flag, ped_has_flag], dim=0)
+        
+        trajs_tid.extend(["FAKE_BUS", "FAKE_PED"])
+        trajs_cat.extend(["exo", "exo"])
+
+    return (trajs_pos, trajs_ang, trajs_vel, trajs_type, has_flags, trajs_tid, trajs_cat)
 
 
 def update_lane_graph_from_argo(static_map, orig, rot):
@@ -549,3 +618,187 @@ def get_max_covariance(data):
         return np.maximum(sigma_x, sigma_y).reshape(ret_shape)
     else:
         raise ValueError("data should be torch.Tensor or numpy.ndarray")
+
+
+def get_semantic_risk_sources(trajs_pos, trajs_vel, trajs_type, trajs_ang, ego_pos, ego_heading, device='cpu'):
+    """
+    识别语义级风险源（鬼探头区域）。
+    
+    使用视线切点算法：
+    1. 找到能形成遮挡的静止物体
+    2. 计算物体四个角点
+    3. 从 Ego 视角找出视线切点（视野边界）
+    4. 选择靠近 Ego 行驶路径的切点作为危险点
+    
+    Returns:
+        List of risk dictionaries with 'pos', 'cov', 'weight'
+    """
+    risk_sources = []
+    
+    # 尺寸估算 (半长, 半宽)
+    DIMENSIONS = {
+        'BUS': (6.0, 1.5),      # 大巴: 12m x 3m
+        'VEHICLE': (2.5, 1.0),   # 轿车: 5m x 2m
+    }
+    
+    # 静止阈值
+    STATIC_SPEED_THRES = 0.5  # m/s
+    
+    # 当前时间步 (最后一个观测帧)
+    curr_step = -1
+    num_agents = len(trajs_pos)
+    
+    # Ego 信息 (应该从参数传入，这里假设 index 0 是 Ego)
+    # 如果 ego_pos 和 ego_heading 已经传入，直接使用
+    if ego_pos is None:
+        ego_pos = trajs_pos[0, curr_step]
+    if ego_heading is None:
+        ego_heading = trajs_ang[0, curr_step]
+    
+    # Ego 前进方向向量
+    ego_forward = torch.stack([torch.cos(ego_heading), torch.sin(ego_heading)])
+    
+    for i in range(num_agents):
+        # 跳过 Ego 自身
+        if i == 0:
+            continue
+        
+        # --- 类型筛选：只处理能形成遮挡的物体 ---
+        # trajs_type: [N, T, 7] one-hot
+        # 0:Vehicle, 1:Ped, 2:Moto, 3:Cyc, 4:Bus, 5:Unknown, 6:Static
+        agent_type_vec = trajs_type[i, curr_step]
+        
+        is_occluder = False
+        half_len, half_width = 2.5, 1.0  # 默认轿车尺寸
+        
+        if agent_type_vec[4] == 1:  # BUS
+            is_occluder = True
+            half_len, half_width = DIMENSIONS['BUS']
+        elif agent_type_vec[0] == 1:  # Vehicle (普通车辆)
+            is_occluder = True
+            half_len, half_width = DIMENSIONS['VEHICLE']
+        # 可扩展：卡车、大型静态物体等
+        
+        if not is_occluder:
+            continue
+        
+        # --- 速度筛选：只处理静止物体 ---
+        vel = trajs_vel[i, curr_step]
+        speed = torch.norm(vel)
+        if speed > STATIC_SPEED_THRES:
+            continue
+        
+        # --- 轨迹走廊过滤：只处理可能经过的遮挡物 ---
+        obs_pos = trajs_pos[i, curr_step]
+        vec_to_obs = obs_pos - ego_pos
+        
+        # 纵向距离 (沿前进方向的投影)
+        longitudinal = torch.dot(vec_to_obs, ego_forward)
+        
+        # 横向距离 (垂直于前进方向，用叉积计算)
+        lateral = torch.abs(ego_forward[0] * vec_to_obs[1] - ego_forward[1] * vec_to_obs[0])
+        
+        # 距离阈值
+        MAX_LONGITUDINAL = 50.0  # 前方 50 米
+        MAX_LATERAL = 5.0        # 横向 5 米（约一个车道宽度）
+        
+        if longitudinal < 0 or longitudinal > MAX_LONGITUDINAL:
+            continue  # 障碍物在后方或太远
+            
+        if lateral > MAX_LATERAL:
+            continue  # 障碍物不在可能经过的路径上
+        
+        # --- 计算障碍物四个角点 ---
+        obs_pos = trajs_pos[i, curr_step]
+        obs_ang = trajs_ang[i, curr_step]
+        
+        cos_a = torch.cos(obs_ang)
+        sin_a = torch.sin(obs_ang)
+        
+        # 局部坐标系下的四个角 (x正方向是车头)
+        # A: 右前, B: 左前, C: 左后, D: 右后
+        corners_local = torch.tensor([
+            [ half_len,  -half_width],  # A: 右前
+            [ half_len,   half_width],  # B: 左前
+            [-half_len,   half_width],  # C: 左后
+            [-half_len,  -half_width],  # D: 右后
+        ], device=device, dtype=torch.float32)
+        
+        # 旋转矩阵
+        rot_matrix = torch.tensor([
+            [cos_a, -sin_a],
+            [sin_a,  cos_a]
+        ], device=device, dtype=torch.float32)
+        
+        # 转换到全局坐标
+        corners_global = torch.mm(corners_local, rot_matrix.T) + obs_pos
+        
+        # --- 找视线切点 ---
+        # 计算 Ego 到每个角点的向量
+        vecs_to_corners = corners_global - ego_pos
+        
+        # 计算每个向量相对于 Ego 前进方向的角度
+        angles_to_corners = torch.atan2(vecs_to_corners[:, 1], vecs_to_corners[:, 0])
+        angle_ego = torch.atan2(ego_forward[1], ego_forward[0])
+        
+        # 相对角度 (归一化到 [-pi, pi])
+        relative_angles = angles_to_corners - angle_ego
+        relative_angles = torch.atan2(torch.sin(relative_angles), torch.cos(relative_angles))
+        
+        # 找最左 (角度最大) 和最右 (角度最小) 的切点
+        left_tangent_idx = torch.argmax(relative_angles)
+        right_tangent_idx = torch.argmin(relative_angles)
+        
+        # --- 选择危险点：Ego 会经过的那一侧的切点 ---
+        # 计算障碍物中心相对于 Ego 的位置
+        vec_to_obs = obs_pos - ego_pos
+        
+        # 判断障碍物在 Ego 的左边还是右边
+        # cross product: ego_forward x vec_to_obs
+        # 正数 = 障碍物在左边, 负数 = 障碍物在右边
+        cross = ego_forward[0] * vec_to_obs[1] - ego_forward[1] * vec_to_obs[0]
+        
+        if cross > 0:
+            # 障碍物在左边，Ego 会从右边经过 -> 右切点是危险点
+            ghost_point = corners_global[right_tangent_idx]
+        else:
+            # 障碍物在右边，Ego 会从左边经过 -> 左切点是危险点
+            ghost_point = corners_global[left_tangent_idx]
+        
+        # --- 检查危险点是否在 Ego 前方 ---
+        vec_to_ghost = ghost_point - ego_pos
+        proj_forward = torch.dot(vec_to_ghost, ego_forward)
+        
+        if proj_forward < 0:
+            # 危险点在 Ego 后方，已经开过去了，跳过
+            continue
+        
+        # --- 生成风险源 ---
+        sigma = 0.8  # 风险区域半径：降至 0.8m，避免封死车道
+        risk_cov = get_risk_covariance(sigma, device=device)
+        
+        risk_sources.append({
+            'type': 'GHOST_PROBE',
+            'pos': ghost_point,
+            'cov': risk_cov,
+            'weight': 10.0 # 权重降至 10.0，避免过分保守
+        })
+    
+    return risk_sources
+
+
+def get_risk_covariance(sigma, device='cpu'):
+    """
+    生成风险区域的协方差矩阵（圆形区域）。
+    
+    Args:
+        sigma: 风险区域半径
+        device: torch device
+    
+    Returns:
+        [2, 2] 协方差矩阵
+    """
+    var = sigma ** 2
+    cov = torch.tensor([[var, 0.0], [0.0, var]], device=device, dtype=torch.float32)
+    return cov
+
