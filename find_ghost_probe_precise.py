@@ -11,11 +11,11 @@ from pathlib import Path
 import os
 import math
 
-# 配置 (放宽版)
-MAX_SCENARIOS = 1000  # 扩大搜索范围
-AV_MIN_SPEED = 1.0   # 降低 AV 速度要求 (1.0 m/s)
-PED_MIN_SPEED = 0.5  # 降低行人速度要求 (0.5 m/s)
-BLOCKER_WIDTH = 2.0  # 假设遮挡物更窄 (覆盖更多车型)
+# 配置 (全量扫描版)
+MAX_SCENARIOS = 250000  # 扫描全部验证集
+AV_MIN_SPEED = 1.0
+PED_MIN_SPEED = 0.5
+BLOCKER_WIDTH = 2.0
 
 # ... (get_scenario_list 保持不变)
 
@@ -23,7 +23,7 @@ def get_scenario_list(limit=500):
     """获取场景列表"""
     print(f"获取场景列表（前 {limit} 个）...")
     result = subprocess.run(
-        ["s5cmd", "--no-sign-request", "ls", "s3://argoverse/datasets/av2/motion-forecasting/val/"],
+        ["s5cmd", "--no-sign-request", "ls", "s3://argoverse/datasets/av2/motion-forecasting/train/"],
         capture_output=True, text=True
     )
     lines = result.stdout.strip().split('\n')
@@ -59,20 +59,20 @@ def geometry_check(av, blocker, ped):
     vec_ped = p_ped - p_av
     angle_ped = np.arctan2(vec_ped[1], vec_ped[0])
     
-    # 计算遮挡角 (假设遮挡物宽 2m, 给一点余量 *1.5)
-    angular_half_width = np.arctan((BLOCKER_WIDTH / 2.0) / dist_av_block) * 1.5
+    # 计算遮挡角 (假设遮挡物宽 2m, 给一点余量 *1.5 -> *2.5 放宽判定)
+    angular_half_width = np.arctan((BLOCKER_WIDTH / 2.0) / dist_av_block) * 2.5
     
     angle_diff = abs(angle_ped - angle_block)
     if angle_diff > np.pi: angle_diff = 2*np.pi - angle_diff
     
-    #只要在遮挡角附近就算
+    # 只要在遮挡角附近就算 (宽容判定)
     if angle_diff < angular_half_width:
         return True
         
     return False
 
 def download_and_analyze(scenario_id):
-    s3_path = f"s3://argoverse/datasets/av2/motion-forecasting/val/{scenario_id}/scenario_{scenario_id}.parquet"
+    s3_path = f"s3://argoverse/datasets/av2/motion-forecasting/train/{scenario_id}/scenario_{scenario_id}.parquet"
     
     with tempfile.TemporaryDirectory() as tmpdir:
         local_path = os.path.join(tmpdir, f"scenario_{scenario_id}.parquet")
@@ -146,26 +146,44 @@ def download_and_analyze(scenario_id):
         return None
 
 def main():
-    print("=" * 60)
-    print("高精度鬼探头筛选器 (宽容版)")
-    print(f"条件: AV速>{AV_MIN_SPEED}, Ped速>{PED_MIN_SPEED}, 遮挡物:所有车辆")
-    print("=" * 60)
-# ... (后续代码无需大改)
+    # ...
     
     scenarios = get_scenario_list(MAX_SCENARIOS)
     print(f"扫描场景池大小: {len(scenarios)}")
+    print(f"启动超线程扫描 (线程数: 64)...")
     
     found_count = 0
-    with open("ghost_probe_candidates.txt", "w") as f:
-        for i, sid in enumerate(scenarios):
-            print(f"\rScanning {i+1}/{len(scenarios)}: {sid[:8]}... (Found: {found_count})", end="", flush=True)
-            res = download_and_analyze(sid)
-            if res:
-                found_count += 1
-                print(f"\n✅ FOUND! {sid}")
-                print(f"   Details: {res['details']}")
-                f.write(f"{sid}\n")
-                f.flush()
+    import concurrent.futures
+    import threading
+    lock = threading.Lock()
+    
+    # 进度计数
+    processed_count = 0
+    
+    with open("ghost_probe_candidates_full.txt", "w") as f, \
+         concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+        
+        # 提交所有任务
+        future_to_sid = {executor.submit(download_and_analyze, sid): sid for sid in scenarios}
+        
+        for future in concurrent.futures.as_completed(future_to_sid):
+            sid = future_to_sid[future]
+            with lock:
+                processed_count += 1
+                if processed_count % 10 == 0:
+                    print(f"\rProgress: {processed_count}/{len(scenarios)} | Found: {found_count}", end="", flush=True)
+            
+            try:
+                res = future.result()
+                if res:
+                    with lock:
+                        found_count += 1
+                        print(f"\n✅ FOUND! {sid}")
+                        print(f"   Details: {res['details']}")
+                        f.write(f"{sid}\n")
+                        f.flush()
+            except Exception as e:
+                pass # 忽略单个任务的失败
     
     print(f"\n\n扫描结束! 共找到 {found_count} 个潜在场景.")
     print("列表已保存至 ghost_probe_candidates.txt")

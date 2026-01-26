@@ -109,3 +109,42 @@ def project_point_on_polyline(point, polyline):
     return proj_pt, heading, cum_distance
 
 
+
+def is_separating_axis(axis, poly1, poly2):
+    min1, max1 = float('inf'), float('-inf')
+    min2, max2 = float('inf'), float('-inf')
+
+    for pt in poly1:
+        projection = np.dot(pt, axis)
+        min1 = min(min1, projection)
+        max1 = max(max1, projection)
+
+    for pt in poly2:
+        projection = np.dot(pt, axis)
+        min2 = min(min2, projection)
+        max2 = max(max2, projection)
+
+    if max1 < min2 or max2 < min1:
+        return True
+    return False
+
+def check_polygon_intersection(poly1, poly2):
+    """
+    Check if two convex polygons intersect using Separating Axis Theorem.
+    poly1, poly2: list of [x, y] points
+    """
+    polygons = [poly1, poly2]
+    for i in range(2):
+        poly = polygons[i]
+        for j in range(len(poly)):
+            p1 = poly[j]
+            p2 = poly[(j + 1) % len(poly)]
+            
+            normal = np.array([p2[1] - p1[1], p1[0] - p2[0]])
+            length = np.linalg.norm(normal)
+            if length == 0: continue
+            axis = normal / length # Normalize
+
+            if is_separating_axis(axis, poly1, poly2):
+                return False
+    return True

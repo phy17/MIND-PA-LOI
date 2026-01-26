@@ -37,7 +37,13 @@
         $$l_t = l_t^{safe} + l_t^{tar} + l_t^{kin} + l_t^{comf}$$
         $$l_t^{safe} = \sum G (\max(D_{bnd} - \mathcal{D}(\mathcal{N}_t^j), 0))$$
     *   **解读**: $\mathcal{D}(\mathcal{N}_t^j)$ 是我们的车到障碍物（高斯分布）的马氏距离。如果这个距离小于安全边界 $D_{bnd}$，惩罚项 $G$ 就会激增。
-*   **实施价值**: 我们要把这个 $l_t^{safe}$ 的计算逻辑（特别是基于马氏距离的碰撞检测）强化到 MIND 的剪枝逻辑里。
+    *   **实施价值**: 我们要把这个 $l_t^{safe}$ 的计算逻辑（特别是基于马氏距离的碰撞检测）强化到 MIND 的剪枝逻辑里。
+    
+    *   **扩展创新 (New)**: **Hierarchical Safety Shield (分层安全护盾)**
+        *   单纯的 MARC 只是将风险作为 Soft Cost (软约束) 放入目标函数。但在极端梯度下（如我们的鬼探头场景），优化器可能为了降低其他 Cost 而“容忍”碰撞。
+        *   我们引入控制理论中的 **Safety Filter (安全过滤器)** 概念作为 **Hard Constraint (硬约束)**。即：
+            $$u_{final} = \begin{cases} u_{opt} & \text{if } \text{CollisionCheck}(u_{opt}) = \text{False} \\ u_{brake} & \text{otherwise} \end{cases}$$
+        *   这不仅是工程修补，而是完善了 Safety Guarantee 的理论闭环：**Soft (MARC) 负责舒适避让，Hard (Shield) 负责绝对底线。**
 
 ---
 

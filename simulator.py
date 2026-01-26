@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from common.visualization import draw_map, draw_agent, draw_scen_trees, reset_ax, draw_traj_trees, draw_traj, draw_ghost_points
+from common.geometry import get_vehicle_vertices, check_polygon_intersection
 
 from agent import CustomizedAgent, NonReactiveAgent
 from loader import ArgoAgentLoader
@@ -36,17 +37,33 @@ class Simulator:
         self.sim_horizon = 500
         self.agents = []
         self.frames = []
+        self.collision_log = [] # 记录碰撞数据
 
     def run(self):
         self.init_sim()
         self.run_sim()
         self.render_video()
+        self.save_collision_report()
 
     def init_sim(self):
         self.agents = []
         scenario_path = Path(self.seq_path + f"/scenario_{self.seq_id}.parquet")
         replay_agent_loader = ArgoAgentLoader(scenario_path)
         self.agents += replay_agent_loader.load_agents(self.smp, self.cl_agents)
+        self.collision_log = []
+
+    def get_agent_polygon(self, agent):
+        # 简化：使用 3D 框的底部 4 个点投影到 2D
+        # agent.state: [x, y, v, heading]
+        # agent.bbox: l, w, h
+        x, y, _, heading = agent.state
+        l, w, h = agent.bbox.l, agent.bbox.w, agent.bbox.h
+        
+        # 假设地面 z=0
+        vertices_3d = get_vehicle_vertices(x, y, 0, heading, l, w, h)
+        # 取底面 4 个点 (前4个)
+        poly_2d = [v[:2] for v in vertices_3d[:4]]
+        return np.array(poly_2d)
 
     def run_sim(self):
         print("Running simulation...")
@@ -54,8 +71,9 @@ class Simulator:
         self.frames = []
         self.sim_time = 0.0
         terminated = False
+        collided = False
 
-        for _ in tqdm(range(self.sim_horizon)):
+        for step_idx in tqdm(range(self.sim_horizon)):
             frame = {}
             # Update agent observations
             agent_obs = []
@@ -70,7 +88,34 @@ class Simulator:
                     agent_gt.append(agent.observe_no_noise())
 
             frame['agents'] = agent_gt
-
+            
+            # --- Collision Check ---
+            # 找到 Ego
+            ego_agent = next((a for a in self.agents if a.id == 'AV'), None)
+            if ego_agent and ego_agent.is_enable and not collided:
+                ego_poly = self.get_agent_polygon(ego_agent)
+                
+                for other in self.agents:
+                    if other.id == 'AV': continue
+                    # 距离预筛选 (例如 10m 内)
+                    if np.linalg.norm(other.state[:2] - ego_agent.state[:2]) > 10.0:
+                        continue
+                        
+                    other_poly = self.get_agent_polygon(other)
+                    if check_polygon_intersection(ego_poly, other_poly):
+                        print(f"\n[COLLISION] At {self.sim_time:.2f}s: Ego collided with {other.id} ({other.type})")
+                        collided = True # 标记为已碰撞，避免重复记录同一事故
+                        self.collision_log.append({
+                            "timestamp": float(self.sim_time),
+                            "frame_idx": step_idx,
+                            "ego_state": ego_agent.state.tolist(), # [x,y,v,h]
+                            "ego_vel": float(ego_agent.state[2]),
+                            "other_id": str(other.id),
+                            "other_type": str(other.type),
+                            "other_state": other.state.tolist(),
+                            "collision_msg": f"Collision with {other.type} ID:{other.id}"
+                        })
+            
             # Update local semantic map and plan
             for agent in self.agents:
                 if isinstance(agent, CustomizedAgent):
@@ -95,6 +140,9 @@ class Simulator:
                                 # 保存鬼探头点用于可视化
                                 if len(res) > 2:
                                     frame['ghost_points'] = res[2]
+                                # 保存目标车道
+                                if hasattr(agent, 'gt_tgt_lane'):
+                                    frame['target_lane'] = agent.gt_tgt_lane
 
                 elif isinstance(agent, NonReactiveAgent):
                     agent.step()
@@ -108,6 +156,15 @@ class Simulator:
             if terminated:
                 print("Simulation terminated!")
                 break
+                
+    def save_collision_report(self):
+        report_path = os.path.join(self.output_dir, 'collision_report.json')
+        with open(report_path, 'w') as f:
+            json.dump(self.collision_log, f, indent=2)
+        if self.collision_log:
+            print(f"⚠️  Collision data saved to {report_path} ({len(self.collision_log)} events)")
+        else:
+            print(f"✅  No collisions detected. Report saved to {report_path}")
 
     def render_video(self):
         if not self.render:
@@ -205,6 +262,17 @@ class Simulator:
         draw_map(ax, self.smp.map_data)
         if scen_tree_vis is not None:
             draw_scen_trees(ax, scen_tree_vis)
+        
+        # 绘制目标车道 (红色)
+        # 从场景树生成器或其他地方获取 gt_tgt_lane
+        # 这里尝试从 AV agent 状态中获取 (如果有)，或者从 planner 传入
+        # 简单起见，我们假设在 CustomizedAgent.plan 中可以记录下 target_lane 到 frame 数据里
+        if 'target_lane' in self.frames[frame_idx]:
+            tgt_lane = self.frames[frame_idx]['target_lane']
+            if tgt_lane is not None and len(tgt_lane) > 1:
+                from common.visualization import draw_polyline
+                draw_polyline(ax, tgt_lane, z=0.05, width=0.5, color='red')
+                
         if traj_tree_vis is not None:
             draw_traj_trees(ax, traj_tree_vis)
         
