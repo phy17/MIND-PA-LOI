@@ -151,6 +151,11 @@ class Simulator:
                 agent.update_state(self.sim_step)
 
             self.frames.append(frame)
+            
+            # [MEMORY FIX] 如果不渲染，定期清理 frame 缓存，防止内存爆炸
+            if not self.render and len(self.frames) > 50:
+                self.frames = self.frames[-10:]
+                
             self.sim_time += self.sim_step
 
             if terminated:
@@ -158,9 +163,21 @@ class Simulator:
                 break
                 
     def save_collision_report(self):
-        report_path = os.path.join(self.output_dir, 'collision_report.json')
+        # 按照用户要求，把报告放到 output/xxx/imgs/ 文件夹旁边，或者直接放到 imgs 里
+        # 但通常 imgs 里全是图片，放在同级的 sim_name 文件夹下比较好
+        # 用户需求："放到跟图片一起的文件夹里面" -> 这里理解为 output_dir 下 (也就是 imgs 的父目录)
+        # 或者为了方便，我们直接放到 imgs 里面也行? 
+        # 用户原话："把那个碰撞报告也放到跟图片一起的文件夹里面"
+        
+        img_dir = self.output_dir + '/imgs'
+        if not os.path.exists(img_dir):
+            os.makedirs(img_dir)
+            
+        report_path = os.path.join(img_dir, 'collision_report.json')
+        
         with open(report_path, 'w') as f:
             json.dump(self.collision_log, f, indent=2)
+        
         if self.collision_log:
             print(f"⚠️  Collision data saved to {report_path} ({len(self.collision_log)} events)")
         else:
@@ -263,15 +280,15 @@ class Simulator:
         if scen_tree_vis is not None:
             draw_scen_trees(ax, scen_tree_vis)
         
-        # 绘制目标车道 (红色)
-        # 从场景树生成器或其他地方获取 gt_tgt_lane
-        # 这里尝试从 AV agent 状态中获取 (如果有)，或者从 planner 传入
-        # 简单起见，我们假设在 CustomizedAgent.plan 中可以记录下 target_lane 到 frame 数据里
-        if 'target_lane' in self.frames[frame_idx]:
-            tgt_lane = self.frames[frame_idx]['target_lane']
-            if tgt_lane is not None and len(tgt_lane) > 1:
-                from common.visualization import draw_polyline
-                draw_polyline(ax, tgt_lane, z=0.05, width=0.5, color='red')
+        # 绘制 Ground Truth (标准答案) 轨迹 (红色细线)
+        # 不再画 target_lane，而是画 AV Agent 的原始轨迹
+        av_agent = next((a for a in self.agents if a.id == 'AV'), None)
+        if av_agent and hasattr(av_agent, 'traj_info'):
+            # traj_info[0] is ALREADY the position array [N, 2]
+            gt_traj = av_agent.traj_info[0]
+            # Remove zeros or invalid points if necessary, but usually full traj is fine
+            from common.visualization import draw_polyline
+            draw_polyline(ax, gt_traj, z=0.05, width=0.5, color='red')
                 
         if traj_tree_vis is not None:
             draw_traj_trees(ax, traj_tree_vis)

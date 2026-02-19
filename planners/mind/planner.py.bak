@@ -1,0 +1,371 @@
+import json
+import numpy as np
+import torch
+import time
+import os
+from importlib import import_module
+from common.geometry import project_point_on_polyline
+from planners.mind.scenario_tree import ScenarioTreeGenerator
+from planners.mind.trajectory_tree import TrajectoryTreeOptimizer
+from planners.mind.utils import get_agent_trajectories, get_semantic_risk_sources
+from av2.datasets.motion_forecasting.data_schema import Track, ObjectState, TrackCategory, ObjectType
+
+# === DEBUG LOGGING ===
+DEBUG_LOG_ENABLED = True
+DEBUG_LOG = []
+
+
+class MINDPlanner:
+    def __init__(self, config_dir):
+        self.planner_cfg = None
+        self.network_cfg = None
+        self.device = None
+        self.network = None
+        self.scen_tree_gen = None
+        self.traj_tree_opt = None
+        self.obs_len = 50
+        self.plan_len = 50
+        self.agent_obs = {}
+        self.state = None
+        self.ctrl = None
+        self.gt_tgt_lane = None
+        self.last_ctrl_seq = []
+
+        with open(config_dir, 'r') as file:
+            self.planner_cfg = json.load(file)
+        self.init_device()
+        self.init_network()
+        self.init_scen_tree_gen()
+        self.init_traj_tree_opt()
+
+    def init_device(self):
+        if self.planner_cfg['use_cuda'] and torch.cuda.is_available():
+            self.device = torch.device("cuda", 0)
+        else:
+            self.device = torch.device('cpu')
+
+    def init_network(self):
+        self.network_cfg = import_module(self.planner_cfg['network_config']).NetCfg()
+        net_cfg = self.network_cfg.get_net_cfg()
+        net_file, net_name = net_cfg['network'].split(':')
+        self.network = getattr(import_module(net_file), net_name)(net_cfg, self.device)
+        ckpt = torch.load(self.planner_cfg['ckpt_path'], map_location=lambda storage, loc: storage)
+        self.network.load_state_dict(ckpt["state_dict"])
+        self.network = self.network.to(self.device)
+        self.network.eval()
+
+    def init_scen_tree_gen(self):
+        scen_tree_cfg = import_module(self.planner_cfg['planning_config']).ScenTreeCfg()
+        self.scen_tree_gen = ScenarioTreeGenerator(self.device, self.network, self.obs_len, self.plan_len, scen_tree_cfg)
+
+    def init_traj_tree_opt(self):
+        traj_tree_cfg = import_module(self.planner_cfg['planning_config']).TrajTreeCfg()
+        self.traj_tree_opt = TrajectoryTreeOptimizer(traj_tree_cfg)
+
+
+    def to_object_state(self, agent):
+        obj_state = ObjectState(True, agent.timestep, (agent.state[0], agent.state[1]), agent.state[3],
+                                (agent.state[2] * np.cos(agent.state[3]),
+                                 agent.state[2] * np.sin(agent.state[3])))
+        return obj_state
+
+    def update_observation(self, lcl_smp):
+        #  update ego agent
+        if 'AV' not in self.agent_obs:
+            self.agent_obs['AV'] = Track('AV', [self.to_object_state(lcl_smp.ego_agent)],
+                                         lcl_smp.ego_agent.type,
+                                         TrackCategory.FOCAL_TRACK)
+        else:
+            self.agent_obs['AV'].object_states.append(self.to_object_state(lcl_smp.ego_agent))
+
+        #  update exo agents
+        updated_agent_ids = ['AV']
+        for agent in lcl_smp.exo_agents:
+            if agent.id not in self.agent_obs:
+                self.agent_obs[agent.id] = Track(agent.id, [self.to_object_state(agent)], agent.type,
+                                                 TrackCategory.TRACK_FRAGMENT)
+            else:
+                self.agent_obs[agent.id].object_states.append(self.to_object_state(agent))
+            updated_agent_ids.append(agent.id)
+
+        # assign dummy agents for agents that are not observed
+        for agent in self.agent_obs.values():
+            if agent.track_id not in updated_agent_ids:
+                agent.object_states.append(ObjectState(False, agent.object_states[-1].timestep,
+                                                       agent.object_states[-1].position,
+                                                       agent.object_states[-1].heading,
+                                                       agent.object_states[-1].velocity))
+
+        for agent in self.agent_obs.values():
+            if len(agent.object_states) > self.obs_len:
+                agent.object_states.pop(0)
+
+    def update_state_ctrl(self, state, ctrl):
+        self.state = state
+        self.ctrl = ctrl
+
+    def update_target_lane(self, gt_tgt_lane):
+        self.gt_tgt_lane = gt_tgt_lane
+
+    def plan(self, lcl_smp):
+        t0 = time.time()
+        # reset
+        self.scen_tree_gen.reset()
+        # high-level command: resampled target lane
+        resample_target_lane, resample_target_lane_info = self.resample_target_lane(lcl_smp)
+
+        self.scen_tree_gen.set_target_lane(resample_target_lane, resample_target_lane_info)
+
+        scen_trees = self.scen_tree_gen.branch_aime(lcl_smp, self.agent_obs)
+
+        if len(scen_trees) <= 0:
+            return False, None, None
+            
+        # --- Semantic Risk Source Identification (MARC-based Ghost Probe Defense) ---
+        trajs_pos, trajs_ang, trajs_vel, trajs_type, _, _, _ = get_agent_trajectories(self.agent_obs, self.device)
+        # Ego 当前位置和朝向 (index 0 是 Ego，最后一帧是当前时刻)
+        ego_pos = trajs_pos[0, -1]
+        ego_heading = trajs_ang[0, -1]
+        risk_sources = get_semantic_risk_sources(trajs_pos, trajs_vel, trajs_type, trajs_ang, 
+                                                  ego_pos=ego_pos, ego_heading=ego_heading, device=self.device)
+        # --------------------------------------------------------------------------
+
+        traj_trees = []
+        debug_info = []
+        for scen_tree in scen_trees:
+            traj_tree, debug = self.get_traj_tree(scen_tree, lcl_smp, risk_sources)
+            traj_trees.append(traj_tree)
+            debug_info.append(debug)
+
+
+        # use multi-threading to speed up
+        # n_proc = len(scen_trees)
+        # traj_trees = Parallel(n_jobs=n_proc)(
+        #     delayed(self.get_traj_tree)(scen_tree, lcl_smp) for scen_tree in scen_trees)
+
+
+        # select the best trajectory
+        best_traj_idx = None
+        min_cost = np.inf
+        all_costs = []
+        cost_breakdowns = []
+        for idx, traj_tree in enumerate(traj_trees):
+            cost, breakdown = self.evaluate_traj_tree(lcl_smp, traj_tree, risk_sources, return_breakdown=True)
+            all_costs.append(cost)
+            cost_breakdowns.append(breakdown)
+            if cost < min_cost:
+                min_cost = cost
+                best_traj_idx = idx
+
+        opt_traj_tree = traj_trees[best_traj_idx]
+        next_node = opt_traj_tree.get_node(opt_traj_tree.get_root().children_keys[0])
+        ret_ctrl = next_node.data[0][-2:]
+        
+        # === DEBUG LOG ===
+        if DEBUG_LOG_ENABLED:
+            log_entry = {
+                'timestamp': lcl_smp.ego_agent.timestep * 0.1,
+                'ego_pos': self.state[:2].tolist() if self.state is not None else None,
+                'ego_vel': float(self.state[2]) if self.state is not None else None,
+                'ego_heading': float(self.state[3]) if self.state is not None else None,
+                'risk_sources_count': len(risk_sources),
+                'risk_sources_details': [
+                    {
+                        'pos': r['pos'].cpu().numpy().tolist() if isinstance(r['pos'], torch.Tensor) else r['pos'],
+                        'type': r.get('type', 'UNKNOWN')
+                    } for r in risk_sources
+                ],
+                'best_traj_idx': best_traj_idx,
+                'min_cost': float(min_cost),
+                'cost_breakdown': cost_breakdowns[best_traj_idx] if cost_breakdowns else None,
+                'chosen_ctrl': {'acc': float(ret_ctrl[0]), 'steer': float(ret_ctrl[1])},
+            }
+            DEBUG_LOG.append(log_entry)
+            
+            # Print summary to console
+            print(f"[t={log_entry['timestamp']:.2f}s] vel={log_entry['ego_vel']:.2f}m/s | "
+                  f"risks={log_entry['risk_sources_count']} | "
+                  f"cost={min_cost:.2f} (r={cost_breakdowns[best_traj_idx]['risk']:.2f}) | "
+                  f"acc={ret_ctrl[0]:.2f} steer={ret_ctrl[1]:.3f}")
+
+        # --- SAFETY SHIELD (AEB) ---
+        # 即使优化器认为此轨迹最佳 (可能因为其他路径代价更高)，
+        # 安全护盾也会进行最后的物理检查。如果未来 1.0s 内发生碰撞，强制刹车。
+        
+        # 1. 前向模拟未来 10 步 (约 1.0s)
+        # 简化的动力学传播
+        ego_state_sim = self.state.copy() # [x, y, v, h]
+        dt = 0.1
+        is_imminent_crash = False
+        
+        for _ in range(5): # 提速：只预测 0.5s (足够了)
+             # 运动学更新: x += v*cos(h)*dt, y += v*sin(h)*dt
+             v = ego_state_sim[2]
+             h = ego_state_sim[3]
+             ego_state_sim[0] += v * np.cos(h) * dt
+             ego_state_sim[1] += v * np.sin(h) * dt
+             # 假设保持当前控制
+             
+             # 2. 碰撞检查
+             sim_pos = ego_state_sim[:2]
+             for agent_id, track in self.agent_obs.items():
+                if agent_id == 'AV': continue
+                if len(track.object_states) > 0:
+                    exo_pos = track.object_states[-1].position
+                    dist = np.linalg.norm(sim_pos - np.array(exo_pos))
+                    if dist < 2.0: # 硬阈值 (车身半径)
+                        is_imminent_crash = True
+                        break
+             if is_imminent_crash: break
+        
+        if is_imminent_crash:
+            if DEBUG_LOG_ENABLED:
+                print(f"\033[91m [CRITICAL] AEB TRIGGERED at t={lcl_smp.ego_agent.timestep * 0.1:.2f}s! Predicted collision in <1.0s. \033[0m")
+            # 覆盖控制指令：最大刹车，方向不改
+            ret_ctrl = np.array([-4.0, 0.0]) # acc=-4m/s^2, steer=0
+        # ---------------------------
+
+        # 返回结果中包含 risk_sources 用于可视化
+        # 增加 AEB 状态返回以便 UI 显示? 暂不需要
+        return True, ret_ctrl, [[scen_trees[best_traj_idx]], [traj_trees[best_traj_idx]], risk_sources]
+
+    def resample_target_lane(self, lcl_smp):
+        # resample the lcl_smp target_lane and info with 1.0m interval
+        resample_target_lane = []
+        resample_target_lane_info = [[] for _ in range(6)]
+
+        for i in range(len(lcl_smp.target_lane) - 1):
+            lane_segment = lcl_smp.target_lane[i:i + 2]
+            lane_segment_len = np.linalg.norm(lane_segment[0] - lane_segment[1])
+            num_sample = int(np.ceil(lane_segment_len / 1.0))
+            for j in range(num_sample):
+                alpha = j / num_sample
+                resample_target_lane.append(lane_segment[0] + alpha * (lane_segment[1] - lane_segment[0]))
+                for k, info in enumerate(lcl_smp.target_lane_info):
+                    resample_target_lane_info[k].append(info[i])
+
+        resample_target_lane.append(lcl_smp.target_lane[-1])
+        for k, info in enumerate(lcl_smp.target_lane_info):
+            resample_target_lane_info[k].append(info[-1])
+
+        # to numpy
+        resample_target_lane = np.array(resample_target_lane)
+        for i in range(len(resample_target_lane_info)):
+            resample_target_lane_info[i] = np.array(resample_target_lane_info[i])
+
+        return resample_target_lane, resample_target_lane_info
+
+
+    def get_traj_tree(self, scen_tree, lcl_smp, risk_sources=None):
+        self.traj_tree_opt.init_warm_start_cost_tree(scen_tree, self.state, self.ctrl, self.gt_tgt_lane, lcl_smp.target_velocity)
+        xs, us = self.traj_tree_opt.warm_start_solve()
+        self.traj_tree_opt.init_cost_tree(scen_tree, self.state, self.ctrl, self.gt_tgt_lane, lcl_smp.target_velocity, risk_sources)
+        return self.traj_tree_opt.solve(us), self.traj_tree_opt.debug
+
+    def evaluate_traj_tree(self, lcl_smp, traj_tree, risk_sources=None, return_breakdown=False):
+        # Vectorized implementation for speed
+        nodes = list(traj_tree.nodes.values())
+        if not nodes:
+            if return_breakdown:
+                return 0.0, {'comfort': 0, 'efficiency': 0, 'target': 0, 'risk': 0}
+            return 0.0
+            
+        # Collect all states: [N, 4] -> (x, y, v, h)
+        states = np.array([n.data[0] for n in nodes])
+        # Collect all ctrls: [N, 2] -> (acc, str)
+        ctrls = np.array([n.data[1] for n in nodes])
+        
+        n_nodes = len(nodes)
+        
+        # 1. Comfort Cost
+        comfort_acc_weight = .1
+        comfort_str_weight = 5.
+        comfort_cost = np.sum(comfort_acc_weight * ctrls[:, 0]**2 + comfort_str_weight * ctrls[:, 1]**2)
+        
+        # 2. Efficiency Cost
+        efficiency_weight = .02
+        efficiency_cost = np.sum(efficiency_weight * (lcl_smp.target_velocity - states[:, 2])**2)
+        
+        # 3. Target Lane Cost
+        target_weight = 5.0
+        dists_to_lane = []
+        for state in states:
+             dists_to_lane.append(self.get_dist_to_target_lane(lcl_smp, state))
+        target_cost = np.sum(target_weight * np.array(dists_to_lane))
+
+        # 4. Risk Cost (Vectorized & Max-Aggregated)
+        risk_cost = 0.0
+        if risk_sources:
+            risk_weight = 2.0
+            ego_pos = torch.from_numpy(states[:, :2]).float().to(self.device).unsqueeze(1) # [N, 1, 2]
+            ego_vel = torch.from_numpy(states[:, 2]).float().to(self.device)  # [N]
+            
+            # Stack all risk sources: [M, 2]
+            risk_pos_list = [r['pos'] for r in risk_sources]
+            risk_cov_list = [r['cov'][0, 0] for r in risk_sources]
+            
+            if risk_pos_list:
+                M = len(risk_pos_list)
+                risk_pos_cat = torch.stack(risk_pos_list).unsqueeze(0) # [1, M, 2]
+                risk_sigma_sq = torch.stack(risk_cov_list).unsqueeze(0) # [1, M]
+                
+                # Broadcasting: [N, 1, 2] - [1, M, 2] -> [N, M, 2]
+                diff = ego_pos - risk_pos_cat 
+                
+                # Mahalanobis dist: [N, M]
+                mahalanobis_sq = torch.sum(diff**2, dim=2) / risk_sigma_sq 
+                mahalanobis_dist = torch.sqrt(mahalanobis_sq)
+                
+                # Safety Boundary (1.4 for 1.12m radius)
+                safety_bnd = 1.4
+                
+                # Calculate Risk Factors for all pairs [N, M]
+                dist_factor = torch.clamp((safety_bnd - mahalanobis_dist) / safety_bnd, min=0.0)
+                
+                # Velocity Factor: 2.0 * v
+                vel_factor = 2.0 * ego_vel.unsqueeze(1) # [N, 1]
+                
+                # Individual Costs: [N, M]
+                raw_costs = risk_weight * vel_factor * dist_factor
+                
+                # Max Aggregation
+                node_max_costs, _ = torch.max(raw_costs, dim=1) # [N]
+                
+                risk_cost = node_max_costs.sum().item()
+
+        total_cost = (comfort_cost + efficiency_cost + target_cost + risk_cost) / n_nodes
+        
+        if return_breakdown:
+            breakdown = {
+                'comfort': float(comfort_cost / n_nodes),
+                'efficiency': float(efficiency_cost / n_nodes),
+                'target': float(target_cost / n_nodes),
+                'risk': float(risk_cost / n_nodes)
+            }
+            return total_cost, breakdown
+        return total_cost
+
+    def get_dist_to_target_lane(self, lcl_smp, state):
+        #  project the state to the target lane
+        proj_state, _, _ = project_point_on_polyline(state[:2], lcl_smp.target_lane)
+        #  get the distance
+        dist = np.linalg.norm(proj_state - state[:2])
+        return dist
+
+    def get_interpolated_state(self, tree, timestep):
+        root_node = tree.get_node(0)
+        if timestep < root_node.data.t:
+            return root_node.data.state, root_node.data.ctrl
+        else:
+            node = root_node
+            while node.data.t <= timestep:
+                node = tree.get_node(node.children_keys[0])
+            #  interpolate the state
+            prev_node = tree.get_node(node.parent_key)
+            prev_state = prev_node.data.state
+            next_state = node.data.state
+            prev_time = prev_node.data.t
+            next_time = node.data.t
+            alpha = (timestep - prev_time) / (next_time - prev_time)
+            interp_state = prev_state + alpha * (next_state - prev_state)
+            return interp_state, node.data.ctrl

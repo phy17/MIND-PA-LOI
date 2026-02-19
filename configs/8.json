@@ -1,0 +1,27 @@
+{
+    "sim_name": "scenario_8",
+    "seq_id": "624a047f-598b-4d2f-ba4b-27e6699896dc",
+    "output_dir": "output/scenario_8/",
+    "num_threads": 4,
+    "render": true,
+    "render_config": {
+        "mode": "fixed",
+        "camera_position": {
+            "x": -447.5,
+            "y": 1170,
+            "yaw": 3.055,
+            "elev": 90
+        }
+    },
+    "cl_agents": [
+        {
+            "id": "AV",
+            "enable_timestep": 4.0,
+            "semantic_lane": -1,
+            "target_velocity": 8,
+            "agent": "agent:MINDAgent",
+            "planner_config": "planners/mind/configs/demo_4.json"
+        }
+    ],
+    "use_cuda": false
+}

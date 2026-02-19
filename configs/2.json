@@ -1,0 +1,27 @@
+{
+    "sim_name": "scenario_2",
+    "seq_id": "00062a32-8d6d-4449-9948-6fedac67bfcd",
+    "output_dir": "output/scenario_2/",
+    "num_threads": 16,
+    "render": true,
+    "render_config": {
+        "mode": "follow",
+        "camera_position": {
+            "x": 0,
+            "y": 0,
+            "yaw": 0,
+            "elev": 90
+        }
+    },
+    "cl_agents": [
+        {
+            "id": "AV",
+            "enable_timestep": 4.0,
+            "semantic_lane": -1,
+            "target_velocity": 8,
+            "agent": "agent:MINDAgent",
+            "planner_config": "planners/mind/configs/demo_1.json"
+        }
+    ],
+    "use_cuda": false
+}

@@ -94,53 +94,62 @@ class TrajectoryTreeOptimizer:
 
                 for exo_idx in range(1, trajs.shape[0]):
                     exo_mean = trajs[exo_idx, i]
-                    #这里是增加了对于障碍物的距离权重
-                    # --- [Innovation] Distance-Adaptive Weighting ---
-                    # Calculate distance between ego and this obstacle
-                    dist_to_obj = np.linalg.norm(ego_mean[:2] - exo_mean[:2])
-                    # Higher weight for closer objects.
-                    # Base weight 1.0 + Extra weight that decays exponentially with distance
-                    # Parameters: 10.0 is max extra gain, 0.3 controls how fast it decays
-                    w_dist = 1.0 + 10.0 * np.exp(-0.3 * dist_to_obj)
-                    # -----------------------------------------------
-
+                    # 原版逻辑：不加距离权重
                     exo_cov = covs[exo_idx, i] + self.config.opt_cfg['w_exo_cov_offset']
                     exo_dis_field = (exo_cov - get_point_mean_distances(centroids, exo_mean)).reshape(
                         cov_dist_field.shape)
                     exo_dis_field = np.maximum(exo_dis_field, 0.0)
                     exo_dis_field[exo_dis_field > 0] += self.config.opt_cfg['w_exo_cost_offset']
 
-                    # 将近距离的障碍的危险权重加大
-                    cov_dist_field += exo_dis_field * w_dist
+                    # 原版：直接累加，不加权重
+                    cov_dist_field += exo_dis_field
 
-                # --- Inject Semantic Risk Sources (Ghost Probes) ---
+                # --- PA-LOI: KA-RF 各向异性横向屏障 (最终修正版) ---
+                # 【修正1】使用真实车道航向计算横向投影
+                # 【修正2】使用 VelocityAwareRiskPotential 提供速度梯度
+                # 【修正3】移除静态场重复计算，避免双重计费 (Double Counting Fix)
+                risk_potentials = []
                 if risk_sources:
-                     for risk in risk_sources:
-                         # risk['pos']: tensor [2] on device
-                         # risk['cov']: tensor [2,2] on device (sigma^2 on diagonal)
-                         
-                         risk_mean = risk['pos'].cpu().numpy()
-                         
-                         # Use the variance (radius^2) as the 'size' of the obstacle
-                         # In this potential field formulation, 'exo_cov' acts as the squared influence radius
-                         risk_radius_sq = risk['cov'][0, 0].item() # sigma^2
-                         
-                         # Compute distance from all grid points to risk center
-                         # get_point_mean_distances returns squared distance? need to verify simple logic
-                         # Assuming get_point_mean_distances matches the dimension of 'exo_cov'
-                         
-                         # Construct the field: (Radius - Distance) > 0 inside danger zone
-                         risk_field = (risk_radius_sq - get_point_mean_distances(centroids, risk_mean)).reshape(cov_dist_field.shape)
-                         risk_field = np.maximum(risk_field, 0.0)
-                         
-                         # If in danger zone, add strict penalty
-                         # risk['weight'] is e.g. 10.0.
-                         if np.any(risk_field > 0):
-                             risk_field[risk_field > 0] += 1.0 # 降低 Base offset，使梯度更平滑
-                             
-                             # Boost weight significantly
-                             w_risk = risk['weight'] 
-                             cov_dist_field += risk_field * w_risk
+                    # 从 target_lane 计算车道航向
+                    if target_lane is not None and len(target_lane) >= 2:
+                        # 取前两个点计算切线方向
+                        lane_vec = target_lane[1] - target_lane[0]
+                        lane_heading = np.arctan2(lane_vec[1], lane_vec[0])
+                    else:
+                        # 回退：使用 ego 当前朝向 (从 init_state)
+                        lane_heading = init_state[3] if len(init_state) > 3 else 0.0
+                    
+                    for risk in risk_sources:
+                        risk_mean = risk['pos'].cpu().numpy()
+                        ghost_lateral = risk.get('ghost_lateral', 1.5)
+                        phantom_state = risk.get('phantom_state', 'BRAKE')
+                        
+                        # [PA-LOI v18] 直接使用 Lerp 权重，不再按状态缩放
+                        w_base = risk['weight']
+                        
+                        # 【关键】创建速度感知势场 (唯一的风险 Cost 来源)
+                        # 这个势场的 get_gradient 会返回 ∂C/∂v，让 iLQR 知道减速能降 Cost
+                        # ⚠️ 不再往 cov_dist_field 添加，避免双重计费
+                        from planners.ilqr.potential import VelocityAwareRiskPotential
+                        
+                        # [PA-LOI v52] 透传 v_safe 参数
+                        v_safe = risk.get('v_safe', 0.0)
+                        
+                        risk_pot = VelocityAwareRiskPotential(
+                            risk_pos=risk_mean,
+                            lane_heading=lane_heading,
+                            ghost_lateral=ghost_lateral,
+                            w_base=w_base,
+                            v_safe=v_safe,      # [v52] Hinge Loss 阈值
+                            lambda_v=0.1,       # 已被 v_safe 逻辑取代，但保留接口兼容
+                            ego_half_width=1.0,
+                            k_steep=2.0
+                        )
+                        risk_potentials.append(risk_pot)
+                        
+                        # 【已移除】静态 CostMap 叠加 - 避免双重计费
+                        # 原来这里有 cov_dist_field += w_base * sigmoid_field
+                        # 现在风险完全由 VelocityAwareRiskPotential 独立负责
                 # ---------------------------------------------------
 
                 quad_cost_field = (self.config.opt_cfg['w_tgt'] * prob * quad_dist_field +
@@ -155,9 +164,18 @@ class TrajectoryTreeOptimizer:
                 state_con = StateConstraint(self.config.opt_cfg['w_state_con'] * prob,
                                             self.config.opt_cfg['state_lower_bound'],
                                             self.config.opt_cfg['state_upper_bound'])
-                ctrl_pot = ControlPotential(self.config.opt_cfg['w_ctrl'] * prob)
+                
+                # [PA-LOI v18] 默认控制权重（不再根据状态切换）
+                # 空间梯度已被抑制，不需要锁方向盘
+                w_ctrl = self.config.opt_cfg['w_ctrl']
+                
+                ctrl_pot = ControlPotential(w_ctrl * prob)
 
-                cost_tree.add_node(Node(cur_index, last_index, [[pot_field, state_pot, state_con], [ctrl_pot]]))
+                # 【PA-LOI】将速度感知风险势场加入 state_pots
+                # 这样 iLQR 在优化时会计算 ∂C/∂v，实现减速功能
+                state_pots = [pot_field, state_pot, state_con] + risk_potentials
+                
+                cost_tree.add_node(Node(cur_index, last_index, [state_pots, [ctrl_pot]]))
                 last_index = cur_index
             last_traj_node_index[cur_node.key] = len(cost_tree.nodes) - 2
             for child_key in cur_node.children_keys:

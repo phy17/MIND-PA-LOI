@@ -8,6 +8,7 @@ class ScenTreeCfg:
         self.seg_length = 15.0  # approximated lane segment length
         self.seg_n_node = 10
         self.far_dist_thres = 10.0
+        self.enable_ghost_probe = True  # 鬼探头检测开关：True=启用, False=禁用
 
 
 class TrajTreeCfg:
@@ -76,6 +77,7 @@ class TrajTreeCfg:
         self.opt_cfg['w_ego'] = 1.0
         self.opt_cfg['w_ego_cov_offset'] = 1.0
 
+        # 与 GitHub 原版 MIND 完全一致的参数
         self.opt_cfg['w_exo'] = 10.0
         self.opt_cfg['w_exo_cov_offset'] = 2.5
         self.opt_cfg['w_exo_cost_offset'] = 10.0

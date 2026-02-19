@@ -1,15 +1,15 @@
 {
-    "sim_name": "demo_4",
-    "seq_id": "624a047f-598b-4d2f-ba4b-27e6699896dc",
-    "output_dir": "output/demo_4/",
-    "num_threads": 4,
+    "sim_name": "scenario_4",
+    "seq_id": "0007df76-c9a2-47aa-83bf-3b2b414109c9",
+    "output_dir": "output/scenario_4/",
+    "num_threads": 16,
     "render": true,
     "render_config": {
-        "mode": "fixed",
+        "mode": "follow",
         "camera_position": {
-            "x": -447.5,
-            "y": 1170,
-            "yaw": 3.055,
+            "x": 0,
+            "y": 0,
+            "yaw": 0,
             "elev": 90
         }
     },
@@ -20,7 +20,7 @@
             "semantic_lane": -1,
             "target_velocity": 8,
             "agent": "agent:MINDAgent",
-            "planner_config": "planners/mind/configs/demo_4.json"
+            "planner_config": "planners/mind/configs/demo_1.json"
         }
     ],
     "use_cuda": false

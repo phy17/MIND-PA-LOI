@@ -346,68 +346,6 @@ def get_agent_trajectories(agent_obs, device):
     trajs_type = torch.from_numpy(trajs_type).to(device)
     has_flags = torch.from_numpy(has_flags).to(device)
 
-    # --- GHOST PROBE SCENARIO INJECTION (Position-based trigger) ---
-    # 只在 Demo 2 的特定区域触发（基于 Ego 位置）
-    # 固定位置：大巴停在 (3100, 1520)，行人从 (3102, 1528) 开始横穿
-    
-    # 获取 Ego 当前位置
-    ego_pos_cur = trajs_pos[0, -1]
-    ego_ang_cur = trajs_ang[0, -1]
-    
-    # 触发条件：Ego 接近目标区域 (x > 3050)
-    # 这样只有在 Demo 2 场景中才会触发
-    TRIGGER_X_MIN = 3050.0
-    TRIGGER_X_MAX = 3150.0
-    
-    if TRIGGER_X_MIN < ego_pos_cur[0].item() < TRIGGER_X_MAX:
-        print(f"[GHOST PROBE] Injecting fake agents at Ego position: {ego_pos_cur.cpu().numpy()}")
-        
-        # 1. Fake Bus (Static, Occluder)
-        # 固定全局坐标
-        bus_pos = torch.tensor([3100.0, 1518.0], device=device, dtype=torch.float32)
-        bus_ang = torch.tensor(0.7, device=device)  # 大约 40 度朝向
-        
-        bus_traj_pos = bus_pos.unsqueeze(0).unsqueeze(0).repeat(1, obs_len, 1)
-        bus_traj_ang = torch.full((1, obs_len), bus_ang, device=device)
-        bus_traj_vel = torch.zeros((1, obs_len, 2), device=device)
-        
-        bus_traj_type = torch.zeros((1, obs_len, 7), device=device, dtype=torch.int16)
-        bus_traj_type[:, :, 4] = 1  # Bus type
-        
-        bus_has_flag = torch.ones((1, obs_len), device=device, dtype=torch.int16)
-        
-        # 2. Fake Pedestrian (Dynamic)
-        # 从大巴后面冲出来，横穿马路
-        ped_pos_current = torch.tensor([3102.0, 1522.0], device=device, dtype=torch.float32)
-        ped_vel = torch.tensor([0.0, 2.0], device=device, dtype=torch.float32)  # 2 m/s 向 +Y 方向
-        
-        # 构造历史轨迹（往回推算）
-        dt = 0.1
-        ped_traj_pos_list = []
-        for t in range(obs_len):
-            time_diff = (obs_len - 1 - t) * dt
-            p_t = ped_pos_current - ped_vel * time_diff
-            ped_traj_pos_list.append(p_t)
-        
-        ped_traj_pos = torch.stack(ped_traj_pos_list).unsqueeze(0)  # [1, 50, 2]
-        ped_traj_ang = torch.full((1, obs_len), 1.57, device=device)  # 朝向 +Y
-        ped_traj_vel = ped_vel.unsqueeze(0).unsqueeze(0).repeat(1, obs_len, 1)
-        
-        ped_traj_type = torch.zeros((1, obs_len, 7), device=device, dtype=torch.int16)
-        ped_traj_type[:, :, 1] = 1  # Pedestrian type
-        
-        ped_has_flag = torch.ones((1, obs_len), device=device, dtype=torch.int16)
-        
-        # Concatenate
-        trajs_pos = torch.cat([trajs_pos, bus_traj_pos, ped_traj_pos], dim=0)
-        trajs_ang = torch.cat([trajs_ang, bus_traj_ang, ped_traj_ang], dim=0)
-        trajs_vel = torch.cat([trajs_vel, bus_traj_vel, ped_traj_vel], dim=0)
-        trajs_type = torch.cat([trajs_type, bus_traj_type, ped_traj_type], dim=0)
-        has_flags = torch.cat([has_flags, bus_has_flag, ped_has_flag], dim=0)
-        
-        trajs_tid.extend(["FAKE_BUS", "FAKE_PED"])
-        trajs_cat.extend(["exo", "exo"])
-
     return (trajs_pos, trajs_ang, trajs_vel, trajs_type, has_flags, trajs_tid, trajs_cat)
 
 
@@ -620,171 +558,484 @@ def get_max_covariance(data):
         raise ValueError("data should be torch.Tensor or numpy.ndarray")
 
 
-def get_semantic_risk_sources(trajs_pos, trajs_vel, trajs_type, trajs_ang, ego_pos, ego_heading, device='cpu'):
+def calculate_adaptive_corridor(lane_width, road_width, ego_vel):
     """
-    识别语义级风险源（鬼探头区域）。
+    基于路宽和车速动态计算双层走廊边界
+    [修正版] 添加几何约束钳位 (Geometric Clamping)
     
-    使用视线切点算法：
-    1. 找到能形成遮挡的静止物体
-    2. 计算物体四个角点
-    3. 从 Ego 视角找出视线切点（视野边界）
-    4. 选择靠近 Ego 行驶路径的切点作为危险点
+    Args:
+        lane_width: 当前车道宽度 (m)
+        road_width: 道路总宽度 (m)，包括相邻车道
+        ego_vel: 自车速度 (m/s)
     
     Returns:
-        List of risk dictionaries with 'pos', 'cov', 'weight'
+        d_critical: 内层边界（绝对禁区）
+        d_outer: 外层边界（感知范围）
+    """
+    EGO_WIDTH = 2.0
+    SAFETY_MARGIN = 0.2  # 安全余量
+    
+    # ====== 内层 (d_critical) - 几何约束钳位 ======
+    # 1. 动力学需求：基础 0.5m + 速度缓冲
+    dynamic_need = 0.5 + 0.03 * abs(ego_vel)
+    
+    # 2. 几何约束：内层宽度绝不能超过 (车道宽/2 - 0.2m)
+    geometric_limit = (lane_width / 2.0) - SAFETY_MARGIN
+    
+    # 3. 取两者较小值 (关键钳位)
+    d_critical = min(dynamic_need, geometric_limit)
+    d_critical = max(d_critical, 0.2)  # 兜底
+    
+    # ====== 外层 (d_outer) - 物理边界约束 ======
+    # 外层宽度绝不能超过道路物理边界
+    physical_boundary = road_width / 2.0
+    d_outer = min(7.0, physical_boundary)  # [Fix] 把 5.0 提升到 7.0
+    
+    # 确保外层 > 内层
+    d_outer = max(d_outer, d_critical + 0.5)
+    
+    return d_critical, d_outer
+
+
+def is_obstacle_on_target_lane(obs_pos, target_lane, lane_width=3.5):
+    """
+    检查障碍物是否在目标车道上或附近
+    
+    Args:
+        obs_pos: 障碍物位置 [x, y] (numpy array)
+        target_lane: 目标车道中心线 [N, 2] (numpy array)
+        lane_width: 车道宽度 (m)
+    
+    Returns:
+        bool: True 如果障碍物可能阻挡 Ego
+    """
+    if target_lane is None or len(target_lane) == 0:
+        return True  # 无目标车道信息时默认不过滤
+    
+    # 计算障碍物到车道中心线的最短距离
+    dists = np.linalg.norm(target_lane - obs_pos, axis=1)
+    min_dist = np.min(dists)
+    
+    # 如果距离 > 车道宽度的一半 + 余量，说明不在目标车道上
+    # 如果距离 > 车道宽度的一半 + 余量，说明不在目标车道上
+    # 修正：对于鬼探头检测，我们需要关注路边的遮挡物
+    # 原来是 (lane_width / 2.0) + 0.5 (约 2.25m)
+    # 修正：对于鬼探头检测，我们需要关注路边的遮挡物
+    threshold = (lane_width / 2.0) + 4.5  # [Fix] 扩大检测范围，捕获路边大巴
+    
+    return min_dist < threshold
+
+
+def project_to_lateral_distance(ego_pos, ghost_point, lane_heading):
+    """
+    计算横向距离（用于 KA-RF Sigmoid 计算）
+    
+    Args:
+        ego_pos: 自车位置 [x, y]
+        ghost_point: 风险点位置 [x, y]
+        lane_heading: 车道方向角 (rad)
+    
+    Returns:
+        float: 横向距离 (m)
+    """
+    dx = ego_pos[0] - ghost_point[0]
+    dy = ego_pos[1] - ghost_point[1]
+    
+    # 投影到横向平面
+    sin_h = np.sin(lane_heading)
+    cos_h = np.cos(lane_heading)
+    
+    lateral_dist = abs(-dx * sin_h + dy * cos_h)
+    
+    return lateral_dist
+
+
+def is_separated_by_solid_line(obs_pos, ego_pos, ego_heading, lane_mark_type):
+    """
+    检查障碍物和 Ego 之间是否有不可跨越的分隔线
+    
+    Args:
+        obs_pos: 障碍物位置 [x, y]
+        ego_pos: Ego 位置 [x, y]
+        ego_heading: Ego 航向角 (rad)
+        lane_mark_type: 车道线类型向量 [crossable, not_crossable, unknown]
+    
+    Returns:
+        bool: True 如果被实线/双黄线分隔（应该过滤）
+    """
+    # 判断障碍物在 Ego 的左边还是右边
+    vec_to_obs = obs_pos - ego_pos
+    ego_forward = np.array([np.cos(ego_heading), np.sin(ego_heading)])
+    
+    # 叉积判断左右
+    cross = ego_forward[0] * vec_to_obs[1] - ego_forward[1] * vec_to_obs[0]
+    
+    # 检查车道线是否不可跨越 (lane_mark_type[1] == 1 表示实线)
+    if lane_mark_type is not None and len(lane_mark_type) >= 2:
+        is_solid = lane_mark_type[1] > 0.5  # 不可跨越
+        if is_solid:
+            return True  # 被实线分隔，应该过滤
+    
+    return False
+
+
+def calculate_phantom_behavior(longitudinal_dist, lateral_dist, ego_vel):
+    """
+    【修正版】基于 TTA 和物理可达性的幻影状态机
+    
+    修正要点：
+    1. 人类速度改回 5.0 m/s (合理冲刺速度)
+    2. 增加物理可达性检查：鬼需要跑多快才能撞上？
+    3. 如果所需速度 > 人类极限，则无需幻影
+    
+    Args:
+        longitudinal_dist: 纵向距离 (m)
+        lateral_dist: 横向距离 (m)
+        ego_vel: 自车速度 (m/s)
+    
+    Returns:
+        dict: 幻影状态和相关信息
+    """
+    # 【修正】人类冲刺速度 5.0 m/s (18 km/h，合理上限)
+    HUMAN_MAX_SPEED = 5.0
+    
+    # [PA-LOI Fix] 缩短前瞻时间，防止过早触发 BRAKE 状态
+    # 原值 3.0 -> 改为 1.5 (配合 Experiment A/v23 的极限测试)
+    LOOKAHEAD_TIME = 1.5  # 秒 (Critical Reaction Time)
+    
+    result = {
+        'state': 'OBSERVE',
+        'inject_phantom': False,
+        'risk_field_only': True,
+        'safe_to_pass': False,
+        'tta_ego': float('inf'),
+        'tta_human': float('inf'),
+        'v_required': 0.0  # 鬼需要的速度
+    }
+    
+    # 计算 TTA
+    if ego_vel > 0.1:
+        result['tta_ego'] = longitudinal_dist / ego_vel
+    if lateral_dist > 0.1:
+        result['tta_human'] = lateral_dist / HUMAN_MAX_SPEED
+    
+    tta_ego = result['tta_ego']
+    tta_human = result['tta_human']
+    
+    # 【关键修正】物理可达性检查
+    # 鬼需要跑多快才能在 Ego 到达前拦住 Ego？
+    if tta_ego > 0.01:
+        v_required = lateral_dist / tta_ego
+        result['v_required'] = v_required
+    else:
+        v_required = float('inf')
+    
+    # 安全通过条件
+    result['safe_to_pass'] = tta_ego < tta_human
+    
+    # ====== 修正后的状态机 ======
+    
+    # 物理可达性检查：如果鬼跑断腿也撞不上，无需幻影
+    if v_required > HUMAN_MAX_SPEED:
+        result['state'] = 'OBSERVE'
+        result['inject_phantom'] = False
+        result['risk_field_only'] = True
+    
+    # 距离检查：太远也无需幻影
+    elif tta_ego > LOOKAHEAD_TIME:
+        result['state'] = 'OBSERVE'
+        result['inject_phantom'] = False
+        result['risk_field_only'] = True
+    
+    # 既近，又能撞上 -> 必须处理
+    else:
+        result['state'] = 'BRAKE'
+        result['inject_phantom'] = True
+        result['risk_field_only'] = False
+    
+    return result
+
+
+def get_semantic_risk_sources(trajs_pos, trajs_vel, trajs_type, trajs_ang, ego_pos, ego_heading, 
+                                device='cpu', ego_vel=None, lane_width=3.5, road_width=None,
+                                target_lane=None):
+    """
+    [PA-LOI 升级版] 识别语义级风险源（鬼探头区域）
+    
+    增强功能：
+    1. 动态双层走廊（基于路宽和车速）
+    2. TTA 状态机（基于时间而非固定距离）
+    3. 目标车道筛选
+    
+    Args:
+        trajs_pos: [N, T, 2] 所有智能体位置轨迹
+        trajs_vel: [N, T, 2] 所有智能体速度轨迹
+        trajs_type: [N, T, type_dim] 类型 one-hot
+        trajs_ang: [N, T] 航向角
+        ego_pos: [2] Ego 当前位置
+        ego_heading: scalar Ego 当前航向
+        device: torch device
+        ego_vel: scalar Ego 当前速度 (m/s)，用于 TTA 和动态走廊计算
+        lane_width: float 当前车道宽度 (m)
+        road_width: float 道路总宽度 (m)，默认使用 lane_width
+        target_lane: [M, 2] 目标车道中心线，用于筛选
+    
+    Returns:
+        List of risk dictionaries with 'pos', 'cov', 'weight', 'phantom_state'
     """
     risk_sources = []
+    filter_log = []
+    
+    # 默认速度
+    if ego_vel is None:
+        ego_vel = 5.0  # 默认 5 m/s
+    if road_width is None:
+        road_width = lane_width
+    
+    # ====== PA-LOI 核心：动态走廊计算 ======
+    d_critical, d_outer = calculate_adaptive_corridor(lane_width, road_width, ego_vel)
+    print(f"[PA-LOI] Dynamic Corridor: d_critical={d_critical:.2f}m, d_outer={d_outer:.2f}m (lane={lane_width:.1f}m, v={ego_vel:.1f}m/s)")
     
     # 尺寸估算 (半长, 半宽)
     DIMENSIONS = {
-        'BUS': (6.0, 1.5),      # 大巴: 12m x 3m
-        'VEHICLE': (2.5, 1.0),   # 轿车: 5m x 2m
+        'BUS': (6.0, 1.5),
+        'VEHICLE': (2.5, 1.0),
     }
     
-    # 静止阈值
     STATIC_SPEED_THRES = 0.5  # m/s
+    MAX_LONGITUDINAL = 50.0   # 扩展检测范围到 50m
     
-    # 当前时间步 (最后一个观测帧)
     curr_step = -1
     num_agents = len(trajs_pos)
     
-    # Ego 信息 (应该从参数传入，这里假设 index 0 是 Ego)
-    # 如果 ego_pos 和 ego_heading 已经传入，直接使用
     if ego_pos is None:
         ego_pos = trajs_pos[0, curr_step]
     if ego_heading is None:
         ego_heading = trajs_ang[0, curr_step]
     
-    # Ego 前进方向向量
     ego_forward = torch.stack([torch.cos(ego_heading), torch.sin(ego_heading)])
     
     for i in range(num_agents):
-        # 跳过 Ego 自身
         if i == 0:
             continue
         
-        # --- 类型筛选：只处理能形成遮挡的物体 ---
-        # trajs_type: [N, T, 7] one-hot
-        # 0:Vehicle, 1:Ped, 2:Moto, 3:Cyc, 4:Bus, 5:Unknown, 6:Static
+        agent_log = {'agent_idx': i, 'passed': False, 'reject_reason': None}
+        
+        # --- 类型筛选 ---
         agent_type_vec = trajs_type[i, curr_step]
         
         is_occluder = False
-        half_len, half_width = 2.5, 1.0  # 默认轿车尺寸
+        half_len, half_width = 2.5, 1.0
+        agent_type_str = 'UNKNOWN'
         
         if agent_type_vec[4] == 1:  # BUS
             is_occluder = True
             half_len, half_width = DIMENSIONS['BUS']
-        elif agent_type_vec[0] == 1:  # Vehicle (普通车辆)
+            agent_type_str = 'BUS'
+        elif agent_type_vec[0] == 1:  # Vehicle
             is_occluder = True
             half_len, half_width = DIMENSIONS['VEHICLE']
-        # 可扩展：卡车、大型静态物体等
+            agent_type_str = 'VEHICLE'
+        
+        agent_log['type'] = agent_type_str
         
         if not is_occluder:
+            agent_log['reject_reason'] = 'NOT_OCCLUDER_TYPE'
             continue
         
-        # --- 速度筛选：只处理静止物体 ---
+        # --- 速度筛选 ---
         vel = trajs_vel[i, curr_step]
-        speed = torch.norm(vel)
+        speed = torch.norm(vel).item()
+        agent_log['speed'] = speed
+        
         if speed > STATIC_SPEED_THRES:
+            agent_log['reject_reason'] = f'MOVING (speed={speed:.2f}m/s)'
             continue
         
-        # --- 轨迹走廊过滤：只处理可能经过的遮挡物 ---
+        # --- 位置计算 ---
         obs_pos = trajs_pos[i, curr_step]
         vec_to_obs = obs_pos - ego_pos
         
-        # 纵向距离 (沿前进方向的投影)
-        longitudinal = torch.dot(vec_to_obs, ego_forward)
+        longitudinal = torch.dot(vec_to_obs, ego_forward).item()
+        lateral = torch.abs(ego_forward[0] * vec_to_obs[1] - ego_forward[1] * vec_to_obs[0]).item()
         
-        # 横向距离 (垂直于前进方向，用叉积计算)
-        lateral = torch.abs(ego_forward[0] * vec_to_obs[1] - ego_forward[1] * vec_to_obs[0])
+        agent_log['pos'] = obs_pos.cpu().numpy().tolist()
+        agent_log['longitudinal'] = longitudinal
+        agent_log['lateral'] = lateral
         
-        # 距离阈值
-        MAX_LONGITUDINAL = 50.0  # 前方 50 米
-        MAX_LATERAL = 5.0        # 横向 5 米（约一个车道宽度）
-        
-        if longitudinal < 0 or longitudinal > MAX_LONGITUDINAL:
-            continue  # 障碍物在后方或太远
+        # --- 纵向筛选 ---
+        # 修正：为了防止漏掉刚经过车头的长车(公交)，允许一定的负值
+        if longitudinal < -5.0:
+            agent_log['reject_reason'] = f'BEHIND_EGO (long={longitudinal:.2f}m)'
+            filter_log.append(agent_log)
+            continue
             
-        if lateral > MAX_LATERAL:
-            continue  # 障碍物不在可能经过的路径上
+        if longitudinal > MAX_LONGITUDINAL:
+            agent_log['reject_reason'] = f'TOO_FAR (long={longitudinal:.2f}m > {MAX_LONGITUDINAL}m)'
+            filter_log.append(agent_log)
+            continue
         
-        # --- 计算障碍物四个角点 ---
-        obs_pos = trajs_pos[i, curr_step]
+        # --- PA-LOI: 动态走廊筛选（使用 d_outer 而非固定值）---
+        if lateral > d_outer:
+            agent_log['reject_reason'] = f'OUT_OF_CORRIDOR (lat={lateral:.2f}m > d_outer={d_outer:.2f}m)'
+            filter_log.append(agent_log)
+            continue
+        
+        # --- PA-LOI: 目标车道筛选 ---
+        # 注意：threshold 已放宽到 (lane_width/2) + 2.5
+        if target_lane is not None:
+            if not is_obstacle_on_target_lane(obs_pos.cpu().numpy(), target_lane, lane_width):
+                agent_log['reject_reason'] = f'NOT_ON_TARGET_LANE'
+                filter_log.append(agent_log)  # 记录被拒绝的原因
+                continue
+        
+        # === PASSED ALL FILTERS ===
+        agent_log['passed'] = True
+        agent_log['reject_reason'] = None
+        filter_log.append(agent_log)
+        
+        # --- 计算角点和危险点 ---
         obs_ang = trajs_ang[i, curr_step]
         
         cos_a = torch.cos(obs_ang)
         sin_a = torch.sin(obs_ang)
         
-        # 局部坐标系下的四个角 (x正方向是车头)
-        # A: 右前, B: 左前, C: 左后, D: 右后
         corners_local = torch.tensor([
-            [ half_len,  -half_width],  # A: 右前
-            [ half_len,   half_width],  # B: 左前
-            [-half_len,   half_width],  # C: 左后
-            [-half_len,  -half_width],  # D: 右后
+            [ half_len,  -half_width],
+            [ half_len,   half_width],
+            [-half_len,   half_width],
+            [-half_len,  -half_width],
         ], device=device, dtype=torch.float32)
         
-        # 旋转矩阵
         rot_matrix = torch.tensor([
             [cos_a, -sin_a],
             [sin_a,  cos_a]
         ], device=device, dtype=torch.float32)
         
-        # 转换到全局坐标
         corners_global = torch.mm(corners_local, rot_matrix.T) + obs_pos
         
-        # --- 找视线切点 ---
-        # 计算 Ego 到每个角点的向量
+        # --- 视线切点算法 ---
         vecs_to_corners = corners_global - ego_pos
-        
-        # 计算每个向量相对于 Ego 前进方向的角度
         angles_to_corners = torch.atan2(vecs_to_corners[:, 1], vecs_to_corners[:, 0])
         angle_ego = torch.atan2(ego_forward[1], ego_forward[0])
         
-        # 相对角度 (归一化到 [-pi, pi])
         relative_angles = angles_to_corners - angle_ego
         relative_angles = torch.atan2(torch.sin(relative_angles), torch.cos(relative_angles))
         
-        # 找最左 (角度最大) 和最右 (角度最小) 的切点
         left_tangent_idx = torch.argmax(relative_angles)
         right_tangent_idx = torch.argmin(relative_angles)
         
-        # --- 选择危险点：Ego 会经过的那一侧的切点 ---
-        # 计算障碍物中心相对于 Ego 的位置
-        vec_to_obs = obs_pos - ego_pos
-        
-        # 判断障碍物在 Ego 的左边还是右边
-        # cross product: ego_forward x vec_to_obs
-        # 正数 = 障碍物在左边, 负数 = 障碍物在右边
-        cross = ego_forward[0] * vec_to_obs[1] - ego_forward[1] * vec_to_obs[0]
+        vec_to_obs_center = obs_pos - ego_pos
+        cross = ego_forward[0] * vec_to_obs_center[1] - ego_forward[1] * vec_to_obs_center[0]
         
         if cross > 0:
-            # 障碍物在左边，Ego 会从右边经过 -> 右切点是危险点
             ghost_point = corners_global[right_tangent_idx]
         else:
-            # 障碍物在右边，Ego 会从左边经过 -> 左切点是危险点
             ghost_point = corners_global[left_tangent_idx]
         
-        # --- 检查危险点是否在 Ego 前方 ---
+        # --- 检查危险点 ---
         vec_to_ghost = ghost_point - ego_pos
         proj_forward = torch.dot(vec_to_ghost, ego_forward)
         
         if proj_forward < 0:
-            # 危险点在 Ego 后方，已经开过去了，跳过
+            for log in filter_log:
+                if log['agent_idx'] == i and log['passed']:
+                    log['passed'] = False
+                    log['reject_reason'] = 'GHOST_POINT_BEHIND'
             continue
         
-        # --- 生成风险源 ---
-        sigma = 0.8  # 风险区域半径：降至 0.8m，避免封死车道
+        # --- PA-LOI: Ghost Point 使用动态走廊筛选 ---
+        ghost_lateral = torch.abs(ego_forward[0] * vec_to_ghost[1] - ego_forward[1] * vec_to_ghost[0]).item()
+        ghost_longitudinal = proj_forward.item()
+        
+        # 使用 d_outer 作为阈值（动态走廊外边界）
+        # 修正：原来使用 d_critical + 0.5 (约1.1m)，对于路边停车场景太小
+        ghost_threshold = d_outer
+        if ghost_lateral > ghost_threshold:
+            for log in filter_log:
+                if log['agent_idx'] == i and log['passed']:
+                    log['passed'] = False
+                    log['reject_reason'] = f'GHOST_LATERAL_TOO_FAR (lat={ghost_lateral:.2f}m > {ghost_threshold:.2f}m)'
+            continue
+        
+        # ====== PA-LOI 核心：TTA 状态机 ======
+        phantom_result = calculate_phantom_behavior(ghost_longitudinal, ghost_lateral, ego_vel)
+        
+        # ============================================================
+        # [PA-LOI v52] Hinge-Loss 虚实双轨策略 (Final Fix)
+        # ============================================================
+        # 核心改动：引入 v_safe (安全防卫速度)
+        # 配合 potential.py 中的 max(0, v - v_safe)^2 
+        #
+        # 1. 虚拟风险 (Blind Spot):
+        #    v_safe = 2.5 m/s. 意图：仅收油至防卫速度，允许通过。
+        #    Optimize: 车辆平滑减速至 2.5 后不再减速 (Cost=0 by Hinge Loss)
+        #
+        # 2. 真实风险 (Real Obstacle):
+        #    v_safe = 0.0 m/s. 意图：必须刹停。
+        #    Optimize: 一脚跺死
+        # ============================================================
+        
+        # ============================================================
+        # [PA-LOI v53 Final] 纯粹的防卫性风险场
+        # 真实障碍物交由 planner.py 的 AEB 模块处理。
+        # 这里的虚拟势场只负责一件事：让车辆逼近盲区时，将速度平滑压制到 2.5m/s。
+        # ============================================================
+        v_safe = 2.5  # 永远保持 2.5m/s 的安全防卫速度
+        
+        # [Fix] 补回被误删的变量定义
+        tta_ego = phantom_result['tta_ego']
+        
+        if tta_ego > 5.0:       
+            weight = 0.0        # 5秒外：自由驾驶，无视盲区
+        elif tta_ego > 2.0:     
+            # 5s -> 2s：权重线性增加 (0 -> 15)，产生平滑减速梯度
+            weight = 15.0 * (5.0 - tta_ego) / 3.0
+        else:                   
+            # < 2s：贴近盲区，权重封顶。
+            # 此时若车速降至 2.5m/s，势场 Hinge-Loss 梯度归零，车辆匀速溜过路口！
+            weight = 15.0
+        
+        # --- 标准协方差 (仅影响 evaluate_traj_tree) ---
+        sigma = 0.8
         risk_cov = get_risk_covariance(sigma, device=device)
         
         risk_sources.append({
             'type': 'GHOST_PROBE',
             'pos': ghost_point,
             'cov': risk_cov,
-            'weight': 10.0 # 权重降至 10.0，避免过分保守
+            'weight': weight,
+            'v_safe': v_safe,  # [v52] 传递 v_safe 给 Planner
+            'ghost_lateral': ghost_lateral,
+            'ghost_longitudinal': ghost_longitudinal,
+            # PA-LOI 新增字段
+            'phantom_state': phantom_result['state'],
+            'tta_ego': phantom_result['tta_ego'],
+            'tta_human': phantom_result['tta_human'],
+            'inject_phantom': phantom_result['inject_phantom'],
+            'safe_to_pass': phantom_result['safe_to_pass']
         })
     
+    # === PRINT FILTER LOG ===
+    # passed_count = sum(1 for log in filter_log if log['passed'])
+    # if len(filter_log) > 0 or len(risk_sources) > 0:
+    #     print(f"[PA-LOI RISK] Candidates: {len(filter_log)} | Passed: {passed_count} | Final: {len(risk_sources)}")
+    #     for rs in risk_sources:
+    #         state_emoji = {'OBSERVE': '👀', 'BRAKE': '🚨', 'PASS': '✅'}.get(rs['phantom_state'], '❓')
+    #         print(f"  {state_emoji} Agent {rs['agent_idx']}: state={rs['phantom_state']} | "
+    #               f"TTA_ego={rs['tta_ego']:.2f}s TTA_human={rs['tta_human']:.2f}s | "
+    #               f"weight={rs['weight']:.1f} | phantom={rs['inject_phantom']}")
+    
+    # # [DEBUG] 如果有候选者但全部被拒绝，打印拒绝原因
+    # if len(risk_sources) == 0 and len(filter_log) > 0:
+    #     rejected = [log for log in filter_log if not log.get('passed', False)]
+    #     if len(rejected) > 0:
+    #         print(f"[PA-LOI DEBUG] All candidates rejected! Top 5 reasons:")
+    #         for log in rejected[:5]:
+    #             print(f"  - Agent {log.get('agent_idx', '?')} ({log.get('type', '?')}): {log.get('reject_reason', 'UNKNOWN')}")
+    
     return risk_sources
+
 
 
 def get_risk_covariance(sigma, device='cpu'):

@@ -153,7 +153,7 @@ class CustomizedAgent(NonReactiveAgent):
     def __init__(self):
         super(CustomizedAgent, self).__init__()
         self.last_pl_tri = None
-        self.plan_rate = 10
+        self.plan_rate = 10 # 恢复高频控制：5Hz -> 10Hz
         self.plan_step = 1.0 / self.plan_rate - 1e-4
         self.planner = None
         self.veh_param = VehicleParam()

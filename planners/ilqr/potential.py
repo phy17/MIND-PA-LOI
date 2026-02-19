@@ -262,3 +262,87 @@ class PotentialField:
                 2.0 * u * 2.0 * v * grid[2, 2]
         )
         )
+
+
+class VelocityAwareRiskPotential:
+    """
+    【PA-LOI v52 Hinge-Loss Final】速度感知风险势场 (Safe Speed Support)
+    
+    Cost = W_base × Sigmoid × max(0, v - v_safe)²
+    
+    梯度：
+      ∂C/∂v = 2 × max(0, v - v_safe) × W_base × Sigmoid
+    
+    特性：
+      - 当 v <= v_safe 时，Cost=0, Gradient=0 -> 允许车辆保持安全速度通过 (解决 500 帧死锁)
+      - 当 v > v_safe 时，产生强力减速梯度 -> 迫使车辆降速至 v_safe
+    """
+    
+    def __init__(self, risk_pos, lane_heading, ghost_lateral, w_base, 
+                 v_safe=0.0,  # 【v52】默认为 0 (刹停)，但支持传入 2.5 (缓行)
+                 lambda_v=0.1, ego_half_width=1.0, k_steep=2.0):
+        self.risk_pos = np.array(risk_pos)
+        self.lane_heading = lane_heading
+        self.ghost_lateral = ghost_lateral
+        self.w_base = w_base
+        self.v_safe = v_safe  # 保存 v_safe
+        self.ego_half_width = ego_half_width
+        self.k_steep = k_steep
+        
+        self.normal = np.array([-np.sin(lane_heading), np.cos(lane_heading)])
+    
+    def _compute_lateral_distance(self, pos):
+        delta = pos - self.risk_pos
+        return np.abs(np.dot(delta, self.normal))
+    
+    def _compute_sigmoid(self, clearance):
+        exp_arg = self.k_steep * (clearance - self.ghost_lateral)
+        exp_arg = np.clip(exp_arg, -10, 10)
+        return 1.0 / (1.0 + np.exp(exp_arg))
+    
+    def get_potential(self, state):
+        pos = state[:2]
+        v = state[2]
+        
+        lateral = self._compute_lateral_distance(pos)
+        clearance = max(lateral - self.ego_half_width, 0.0)
+        sig = self._compute_sigmoid(clearance)
+        
+        # [v52] Hinge Loss: 只惩罚超过 v_safe 的部分
+        excess_vel = max(0.0, v - self.v_safe)
+        kinetic_energy = excess_vel * excess_vel
+        
+        return self.w_base * sig * kinetic_energy
+    
+    def get_gradient(self, state):
+        v = state[2]
+        gradient = np.zeros(len(state))
+        
+        # [v52 Critical] 如果速度已经安全（且非倒车），梯度必须为 0！
+        excess_vel = max(0.0, v - self.v_safe)
+        if excess_vel <= 0:
+            return gradient
+            
+        lateral = self._compute_lateral_distance(state[:2])
+        clearance = max(lateral - self.ego_half_width, 0.0)
+        sig = self._compute_sigmoid(clearance)
+        
+        gradient[2] = self.w_base * sig * 2.0 * excess_vel
+        return gradient
+    
+    def get_hessian(self, state):
+        v = state[2]
+        hessian = np.zeros((len(state), len(state)))
+        
+        # [v52 Critical] Hessian 也要截断
+        excess_vel = max(0.0, v - self.v_safe)
+        if excess_vel <= 0:
+            return hessian
+            
+        lateral = self._compute_lateral_distance(state[:2])
+        clearance = max(lateral - self.ego_half_width, 0.0)
+        sig = self._compute_sigmoid(clearance)
+
+        hessian[2, 2] = self.w_base * sig * 2.0
+        return hessian
+
