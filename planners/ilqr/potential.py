@@ -71,6 +71,8 @@ class PotentialField:
 
     def get_potential(self, state):
         query_pos = state[:2]
+        if not np.all(np.isfinite(query_pos)):
+            return 1e6  # NaN 状态返回高代价
         x_idx, y_idx = self._get_idx_from_pos(query_pos)
         grid_ori = self._get_grid_ori(x_idx, y_idx)
         smooth_local_grid = self._get_smooth_local_grid(x_idx, y_idx)
@@ -80,6 +82,8 @@ class PotentialField:
 
     def get_gradient(self, state):
         query_pos = state[:2]
+        if not np.all(np.isfinite(query_pos)):
+            return np.zeros_like(state)
         x_idx, y_idx = self._get_idx_from_pos(query_pos)
         grid_ori = self._get_grid_ori(x_idx, y_idx)
         smooth_local_grid = self._get_smooth_local_grid(x_idx, y_idx)
@@ -90,6 +94,8 @@ class PotentialField:
 
     def get_hessian(self, state):
         query_pos = state[:2]
+        if not np.all(np.isfinite(query_pos)):
+            return np.zeros((state.shape[0], state.shape[0]))
         x_idx, y_idx = self._get_idx_from_pos(query_pos)
         grid_ori = self._get_grid_ori(x_idx, y_idx)
         smooth_local_grid = self._get_smooth_local_grid(x_idx, y_idx)
@@ -154,6 +160,10 @@ class PotentialField:
         smooth_local_grid[2, 1] = np.mean(local_grid[1:, 1])
         smooth_local_grid[1, 1] = np.mean(local_grid[1, 1])
 
+        # [数值安全] 限制势场值，防止极端情况下的 overflow
+        MAX_POTENTIAL = 1e6
+        smooth_local_grid = np.clip(smooth_local_grid, -MAX_POTENTIAL, MAX_POTENTIAL)
+
         self._add_to_cache(x_idx, y_idx, smooth_local_grid)
 
         return smooth_local_grid
@@ -167,7 +177,7 @@ class PotentialField:
         return u, v
 
     def _quadratic_interpolation(self, u, v, grid):
-        return (
+        result = (
                 (1 - u) ** 2 * (1 - v) ** 2 * grid[0, 0] +
                 (1 - u) ** 2 * 2.0 * (1 - v) * v * grid[1, 0] +
                 (1 - u) ** 2 * v ** 2 * grid[2, 0] +
@@ -178,6 +188,10 @@ class PotentialField:
                 u ** 2 * 2.0 * (1 - v) * v * grid[1, 2] +
                 u ** 2 * v ** 2 * grid[2, 2]
         )
+        # [数值安全] 防止 NaN / Inf 传播
+        if not np.isfinite(result):
+            result = 1e6
+        return result
 
     def _compute_gradient(self, u, v, grid):
         gradient_x = self._partial_derivative_x(u, v, grid)

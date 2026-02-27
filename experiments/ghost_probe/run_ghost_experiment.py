@@ -126,6 +126,12 @@ class GhostProbeSimulator(Simulator):
             min_idx = np.argmin(distances)
             min_dist = distances[min_idx]
             
+            # Skip occluders that AV will pass before planning starts
+            # enable_timestep=4.0s @ 50Hz = frame 200, add buffer for approach
+            min_reachable_idx = int(getattr(self, '_min_traj_idx', 250))
+            if min_idx < min_reachable_idx:
+                continue
+            
             # Must be close to path but not ON the path (would block ego)
             if 2.0 < min_dist < 6.0:  # Expanded range slightly
                 if min_dist < best_distance_to_path:
@@ -217,9 +223,17 @@ class GhostProbeSimulator(Simulator):
         # 前端边缘在车道上的投影：从 ego_pos_at_impact（遮挡物中心对应的车道点）
         # 往 ego 去的方向进 vehicle_half_length，就是另一端的纵向位置
         # 再减 0.5m 微调，让假人刚好从后保险杠后面蹿出来？
-        front_edge_offset = vehicle_half_length - 0.5  # +2.0m (Opposite side!)
-        target_pos = ego_pos_at_impact + lane_dir * front_edge_offset
+        front_edge_offset = vehicle_half_length - 0.5  # +2.0m
         
+        # [精准修正] 严格沿着 ego_traj (即那条红线) 计算目标点，解决弯道目标点偏离的问题
+        accumulated_dist = 0.0
+        target_idx = best_path_idx
+        for i in range(best_path_idx, len(ego_traj) - 1):
+            accumulated_dist += np.linalg.norm(ego_traj[i+1] - ego_traj[i])
+            if accumulated_dist >= front_edge_offset:
+                target_idx = i + 1
+                break
+        target_pos = ego_traj[target_idx]
         # 横向方向：从 target_pos 指向遮挡物中心的横向分量
         vec_to_occluder = occluder_pos - target_pos
         lat_dir = vec_to_occluder - np.dot(vec_to_occluder, lane_dir) * lane_dir
@@ -320,6 +334,18 @@ class GhostProbeSimulator(Simulator):
                             is_success, res = agent.plan()
                             if not is_success:
                                 print(f"[ERROR] Agent {agent.id} plan failed!", flush=True)
+                                if agent.id == 'AV':
+                                    print(f"  [GHOST_EXP] Recording planner failure as a collision for testing purposes.", flush=True)
+                                    self.collision_log.append({
+                                        "timestamp": float(self.sim_time),
+                                        "frame_idx": step_idx,
+                                        "ego_state": ego_agent.state.tolist() if ego_agent else [],
+                                        "ego_vel": float(ego_agent.state[2]) if ego_agent else 0.0,
+                                        "other_id": "PLANNER_CRASH",
+                                        "other_type": "ERROR",
+                                        "other_state": [],
+                                        "collision_msg": "Planner crashed (NaNs/Failed optimization)."
+                                    })
                                 terminated = True
                                 break
 
@@ -336,6 +362,15 @@ class GhostProbeSimulator(Simulator):
                 else:
                     raise ValueError("Unknown agent type")
                 agent.update_state(self.sim_step)
+
+            # --- Ghost Tracking Log ---
+            if self.ghost_spawned and self.ghost_agent and step_idx % 10 == 0:
+                gh_pos = self.ghost_agent.state[:2]
+                target_p = self.ghost_config['target_pos']
+                dist_to_target = float(np.linalg.norm(gh_pos - target_p))
+                gh_vel = float(self.ghost_agent.state[2])
+                status = "STOPPED on Red Line" if gh_vel < 0.1 else "MOVING to Red Line"
+                print(f"[GHOST TRACKING] t={self.sim_time:.2f}s | Status: {status} | Vel: {gh_vel:.2f}m/s | Dist to Red Line: {dist_to_target:.2f}m", flush=True)
 
             self.frames.append(frame)
             self.sim_time += self.sim_step
@@ -383,7 +418,7 @@ class GhostProbeSimulator(Simulator):
         # (车长约5m，自车中心到前保险杠约2.0~2.5m，保险杠距离假人实际仅剩 2.0m)
         # 不减速的 Baseline (约 4.0m/s) 刹停至少需 2.8 米 -> 物理亏空，必定撞飞！
         # PA-LOI 提前减速 (约 2.5m/s) 刹停仅需 1.28 米 -> 完美避险！
-        strict_trigger_dist = 4.5
+        strict_trigger_dist = getattr(self, 'strict_trigger_dist', 4.5)
         
         if debug:
             debug_msg = f"LongDist: {longitudinal_dist:.2f}m vs Strict: {strict_trigger_dist}m"
@@ -407,8 +442,8 @@ class GhostProbeSimulator(Simulator):
         start_pos = self.ghost_config['ambush_pos']
         approach_dir = self.ghost_config['approach_dir']
         
-        # ADAS tracking: adjust target to ego's current lateral position
-        target_pos = ego_pos.copy()
+        # ADAS tracking: use the original planned target_pos (lane center)
+        target_pos = self.ghost_config['target_pos']
         
         # Generate trajectory frames (remaining simulation time)
         remaining_frames = self.sim_horizon - int(self.sim_time / self.sim_step)
@@ -421,12 +456,25 @@ class GhostProbeSimulator(Simulator):
         direction = target_pos - start_pos
         heading = np.arctan2(direction[1], direction[0])
         
+        # 行人从 start_pos 移动到 target_pos（车道中心）后停下
+        stop_distance = np.linalg.norm(target_pos - start_pos)
+        stop_time = stop_distance / self.pedestrian_speed  # 到达车道中心所需时间
+        print(f"[GHOST_EXP] Pedestrian: {stop_distance:.2f}m to lane center, "
+              f"arrives in {stop_time:.2f}s, then STOPS")
+        
         for i in range(remaining_frames + 50):  # Extra buffer
             t = i * self.sim_step
-            pos = start_pos + approach_dir * self.pedestrian_speed * t
+            if t <= stop_time:
+                # 还没到车道中心：匀速行走
+                pos = start_pos + approach_dir * self.pedestrian_speed * t
+                vel = self.pedestrian_speed
+            else:
+                # 到达车道中心：停住不动（愣在原地）
+                pos = start_pos + approach_dir * stop_distance
+                vel = 0.0
             traj_pos.append(pos)
             traj_ang.append(heading)
-            traj_vel.append(self.pedestrian_speed)
+            traj_vel.append(vel)
             has_flag.append(1)
         
         traj_pos = np.array(traj_pos).astype(np.float32)
@@ -475,6 +523,7 @@ def run_comparative_experiment(config_path, output_base_dir="output/ghost_experi
     sim_baseline = GhostProbeSimulator(config_path, enable_ghost_probe_defense=False)
     sim_baseline.init_sim()
     sim_baseline.output_dir = output_base_dir + "/baseline/"
+    sim_baseline.sim_horizon = 550  # 550 frames = 11s
     sim_baseline.run()
     
     results['baseline'] = {
@@ -492,7 +541,7 @@ def run_comparative_experiment(config_path, output_base_dir="output/ghost_experi
     sim_improved.init_sim()
     # [Benchmark] run for more steps to capture full stop
     sim_improved.output_dir = output_base_dir + "/improved/"
-    sim_improved.sim_horizon = 700 # Manually override horizon
+    sim_improved.sim_horizon = 550 # 550 frames = 11s
     sim_improved.run()
     
     results['improved'] = {

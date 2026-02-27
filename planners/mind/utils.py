@@ -962,39 +962,44 @@ def get_semantic_risk_sources(trajs_pos, trajs_vel, trajs_type, trajs_ang, ego_p
         phantom_result = calculate_phantom_behavior(ghost_longitudinal, ghost_lateral, ego_vel)
         
         # ============================================================
-        # [PA-LOI v52] Hinge-Loss 虚实双轨策略 (Final Fix)
+        # [PA-LOI v55] 自适应安全速度 v_safe
+        # 
+        # 物理推导：假设行人从遮挡物后方走出到车道中心需要横穿距离 d_ped，
+        # 速度为 v_ped。AEB 能提供的最大减速度为 a_aeb。
+        # 则 AV 在行人完全进入车道前有 t_react = d_ped / v_ped 的反应 + 制动时间。
+        # 在此时间内 AV 需要从 v_safe 刹停：v_safe = a_aeb * t_react
+        # 
+        # 同时限制最大降速幅度为当前速度的 40%，确保舒适性。
+        # 即 v_safe >= 0.6 * ego_vel（最多减 40%）
         # ============================================================
-        # 核心改动：引入 v_safe (安全防卫速度)
-        # 配合 potential.py 中的 max(0, v - v_safe)^2 
-        #
-        # 1. 虚拟风险 (Blind Spot):
-        #    v_safe = 2.5 m/s. 意图：仅收油至防卫速度，允许通过。
-        #    Optimize: 车辆平滑减速至 2.5 后不再减速 (Cost=0 by Hinge Loss)
-        #
-        # 2. 真实风险 (Real Obstacle):
-        #    v_safe = 0.0 m/s. 意图：必须刹停。
-        #    Optimize: 一脚跺死
-        # ============================================================
+        a_aeb = 4.0     # AEB 制动减速度 (m/s²)
+        d_ped = ghost_lateral  # 行人需要横穿的距离 (m)
+        v_ped = 2.0     # 假设行人速度 (m/s)
         
-        # ============================================================
-        # [PA-LOI v53 Final] 纯粹的防卫性风险场
-        # 真实障碍物交由 planner.py 的 AEB 模块处理。
-        # 这里的虚拟势场只负责一件事：让车辆逼近盲区时，将速度平滑压制到 2.5m/s。
-        # ============================================================
-        v_safe = 2.5  # 永远保持 2.5m/s 的安全防卫速度
+        # 物理下界：AV 能以此速度在行人横穿时间内刹停
+        t_react = d_ped / v_ped if v_ped > 0 else 1.0
+        v_safe_physics = a_aeb * t_react  # 物理上允许的最大通过速度
+        
+        # 舒适性下界：最多只降 40% 的速度
+        v_safe_comfort = 0.6 * ego_vel if ego_vel > 0 else 2.5
+        
+        # 取两者中的较大值（更宽松的约束），并设置绝对下限 2.0 m/s
+        v_safe = max(min(v_safe_physics, ego_vel), v_safe_comfort, 2.0)
         
         # [Fix] 补回被误删的变量定义
         tta_ego = phantom_result['tta_ego']
         
-        if tta_ego > 5.0:       
-            weight = 0.0        # 5秒外：自由驾驶，无视盲区
+        if tta_ego > 6.5:       
+            weight = 0.0        # 6.5秒外：自由驾驶，无视盲区
         elif tta_ego > 2.0:     
-            # 5s -> 2s：权重线性增加 (0 -> 15)，产生平滑减速梯度
-            weight = 15.0 * (5.0 - tta_ego) / 3.0
+            # 6.5s -> 2s：权重线性增加 (0 -> 25)，产生平滑减速梯度
+            # [PA-LOI v58] 权重从15→25，TTA从5s→6.5s（温和调整）
+            # 原因：v53的15太弱+5s太晚，导致减速窗口不足
+            weight = 25.0 * (6.5 - tta_ego) / 4.5
         else:                   
             # < 2s：贴近盲区，权重封顶。
             # 此时若车速降至 2.5m/s，势场 Hinge-Loss 梯度归零，车辆匀速溜过路口！
-            weight = 15.0
+            weight = 25.0
         
         # --- 标准协方差 (仅影响 evaluate_traj_tree) ---
         sigma = 0.8

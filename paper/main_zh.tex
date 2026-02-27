@@ -1,0 +1,303 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% ============================================================
+% Packages
+% ============================================================
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{pifont}
+\usepackage[caption=false,font=footnotesize]{subfig}
+
+% 支持中文排版 (推荐在 Overleaf 中使用 XeLaTeX 编译)
+\usepackage[UTF8]{ctex}
+
+% Checkmark and crossmark
+\newcommand{\cmark}{\ding{51}}
+\newcommand{\xmark}{\ding{55}}
+
+% ============================================================
+% Title
+% ============================================================
+\title{面向遮挡横穿主动避撞的速度感知风险场}
+
+% --- Anonymized Author Block for Double-Blind Review ---
+\author{\IEEEauthorblockN{Primary Author}
+\IEEEauthorblockA{\textit{Author affiliation is anonymized} \\
+\textit{for double-blind review.}\\
+City, Country \\
+email anonymized}
+}
+% --- End Anonymized Block ---
+
+% --- Original Author Block (Keep Commented for Initial Submission) ---
+% \author{\IEEEauthorblockN{Hongyu Peng}
+% \IEEEauthorblockA{\textit{School of Computer Science and Technology /} \\
+% \textit{School of Artificial Intelligence, Anhui University}\\
+% Hefei, China \\
+% z125304112@stu.ahu.edu.cn}
+% }
+% --- End Original Block ---
+
+\begin{document}
+\maketitle
+
+% ============================================================
+% Abstract
+% ============================================================
+\begin{abstract}
+视线受阻横穿场景 (Occluded Pedestrian Crossing)——即行人突然从视野遮挡物后方显现——对自动驾驶系统的安全性构成了严峻挑战。由于传统的反应式自动紧急制动（AEB）系统仅在传感器直接观测到行人后才开始响应，在典型的城市行驶速度下，系统制动力往往因物理制动距离不足而无法有效避免碰撞。
+在本文中，我们提出了 \textbf{PA-LOI}（基于潜在遮挡推断的主动预判）。该方法作为一个计算高效的模块化风险感知规划层，能够在检测到实际行人\emph{之前}，基于物理可达性模型主动降低车辆驶经高危遮挡区域时的速度。
+本研究摒弃了传统的空间避障势场范式，针对潜在遮挡区域设计了“速度感知合页损失（Hinge-Loss）代价函数”。PA-LOI 不仅使自车在到达预警交汇点时的初始动能显著降低，从而在物理层面扩展了下游 AEB 系统的制动安全冗余，而且凭借其合页函数无响应时的微分特性，有效避免了传统空间势场容易引发的轨迹振荡与局部死锁问题。
+我们在基于 Argoverse 2 数据集搭建的复杂十字路口和道路右侧连续停车阵列两个典型高危场景中对该系统进行了验证。在十字路口测试中，PA-LOI 协同 AEB 在前车距行人仅 \SI{2.25}{\meter} 的切入触发距离下即可实现零碰撞，较常规 AEB 所需的 \SI{3.25}{\meter} 安全距离提升了 \textbf{31\%}。在单独 AEB 无法避免碰撞的高速直道近距离横穿测试中，该联合架构仍能在 \SI{1.75}{\meter} 触发视距下避免碰撞，并将最恶劣工况下的碰撞动能降低了约 \textbf{91\%}（碰撞速度从 \SI{7.75}{\meter\per\second} 降至 \SI{2.26}{\meter\per\second}）。
+\end{abstract}
+
+\begin{IEEEkeywords}
+Automatic Emergency Braking, Autonomous Driving, Euro NCAP CPNA, Occluded Pedestrian Crossing, Occlusion-Aware Planning, Risk Field
+\end{IEEEkeywords}
+
+% ============================================================
+% I. Introduction
+% ============================================================
+\section{引言 (Introduction)}
+
+弱势道路使用者的安全防护一直是城市智能交通系统研究的关键痛点。其中，由视线受阻引发的弱势群体横穿场景 (Occluded Pedestrian Crossing) 尤为值得关注。这类场景在汽车安全标准中通常被定义为 Euro NCAP 的 CPNA（Car-to-Pedestrian Nearside Adult，车对近端成人）标准测试场景~\cite{euroncap2023}：即行人突然从遮挡物（如路边连续停放的车辆或大型设施）前方的盲区横穿入当前主车道。由于遮挡物的存在，在目标完全暴露在车辆感知视场以内之前，留给系统执行物理规避和制动的时间窗极其有限。
+
+当前主流的自动紧急制动 (AEB) 系统在减少直视追尾和常规视野下的行人冲突方面已展现出显著成效~\cite{cicchino2022effects}。此外，向信息-物理-社会系统（CPSS）和平行驾驶架构的范式转变，极大地推动了智能汽车从被动感知向主动预测和避撞的演进~\cite{wang2024parallel, wang2021review}。然而，当面对极近距离内突然出现的视野盲区切入者时，AEB 系统的底层逻辑存在严重的局限性。从本质上看，AEB 在遮挡横穿场景中的根本瓶颈并非感知算法的响应延迟，而是遮挡几何结构对探测距离的物理约束。在当前主流的基于视距的感知体系（摄像头与激光雷达）下，传感器只有在行人完全脱离遮挡物的遮蔽后才能确认其存在。在 CPNA 场景中，此时行人与车辆的可用净距通常仅为 2$\sim$4 米。而以典型城市巡航速度 \SI{8.0}{\meter\per\second} 计，即便使用保守的减速度假设（$a_{\text{max}} = \SI{-4.0}{\meter\per\second\squared}$），最小运动学制动距离也高达 \SI{8.0}{\meter}——远超可用净距的两倍。这一运动学矛盾无法单纯通过提升感知算法的灵敏度来弥补；唯有在进入遮挡区域\emph{之前}主动进行速度管理，才能从根本上扩大 AEB 的有效工作包络。
+
+由此，我们提出了 \textbf{PA-LOI} 框架。本研究的技术贡献如下：
+\begin{enumerate}
+    \item 提出了一种基于到达时间（TTA）的物理可达性评估与防守车速 ($v_{\text{safe}}$) 动态界定机制。系统通过运动学模型反推行人的威胁时间窗，并以此建立交汇前的安全车速包络界限。该机制精确剥离了对非实质性碰撞威胁的过度干预，在满足底层制动需求的前提下最大限度缓解了前置规划层易发的“幽灵刹车”问题，有效平衡了安全性与通行效率；
+    \item 提出了一种以速度解耦的合页损失（Hinge-Loss）动态风险场代价函数，打破了传统空间排斥势场在受限车道（如单车道或实线约束）内易引发轨迹震荡及陷入局部优化死锁的局限性；
+    \item 成功在基于最优控制的闭环高频规划器中完成了该主被动联合模块的轻量化部署验证，实验测得 PA-LOI 单帧平均额外耗时仅约 \SI{0.55}{\milli\second}。新方案得益于惩罚分区的闭式解析与平滑可导特性，与求解器的偏导推演高度契合，为未知盲区环境下的碰撞风控提供了高效且极具泛化性的架构参考。
+\end{enumerate}
+
+该框架可作为独立的主动风控层，与目前基于最优控制 (Optimal Control) 的多类轨迹寻优算法实现平滑集成。
+
+% ============================================================
+% II. Related Work
+% ============================================================
+\section{相关工作 (Related Work)}
+
+\subsection{自动紧急制动 (AEB) 与安全防线测试}
+提升在不确定环境下的弱势群体安全性是高级辅助驾驶系统发展的重心。Euro NCAP 近年来持续深化了以 CPNA 为代表的视线受阻场景测试方案并提出了严苛标准~\cite{euroncap2023}。实证表明，由于侧翼遮挡物导致感知预留期缩短，部分配置 AEB 的车辆在此类极端场景中依然存在较高的碰撞概率~\cite{cicchino2022effects}。Schratter 等人~\cite{schratter2019occlusion} 专门针对遮挡场景提出了一种基于 POMDP 的行人防碰撞系统，强调了在此类环境中超越反应式制动、进行主动决策的根本需求。这些发现共同为在规划前端引入速度主动干预管控思路奠定了理论支持。
+
+\subsection{视野盲点与遮挡感知运动规划}
+在运动规划中处理不确定性遮挡问题已吸引了多种方法论视角的广泛关注。Orzechowski 等人~\cite{orzechowski2018tackling} 率先提出了基于集合的安全验证方法以处理有限的传感器范围和遮挡区域，而 Koschi 和 Althoff~\cite{koschi2021setbased} 将其扩展为一个综合框架，使用结合了遮挡与交通规则的正式可达性分析来预测可见和隐藏的交通参与者。Nager 等人~\cite{nager2019shadows} 提出了意图感知的动态阴影区域，实现了计算高效的遮挡区域安全推理。更近地，M\"{o}ller 等人开发了 FRENETIX-Occlusion 框架~\cite{blindspot2024} 及其用于城市遮挡跟踪的后续版本~\cite{occtrack2025}，将虚拟目标建模直接嵌入了轨迹评估管道中。
+
+从决策理论的角度来看，责任敏感安全模型 (RSS)~\cite{shalev2017rss} 在最坏情况假设下提供了保守的安全驾驶边界，但过度应用会使驾驶过于谨慎且缺乏实用性。基于部分可观测马尔可夫决策过程 (POMDP) 的规划器~\cite{zhang2021pomdp} 提供了处理部分可观测性的原则性方法，但会产生巨大的计算开销。近期的概率学方法，例如 Chen 等人~\cite{chen2023quantified} 在 ITSC 2023 展出的虚拟障碍物随机模型预测控制 (Stochastic MPC) 框架，量化了遮挡风险并规划了平衡安全性与效率的轨迹。更宽泛地，基于场景的模型预测控制已被证明在高速公路和城市驾驶环境的不确定性下进行安全决策是有效的~\cite{cesari2017mpc}。
+
+需要指出的是，PA-LOI 与上述方法并不处于同一抽象层级：它并非旨在解决广义的部分可观测序贯决策问题，而是聚焦于一个更具针对性的工程子问题——在已知遮挡结构下且单帧运算预算 $< \SI{1}{\milli\second}$ 内，管理单一横穿威胁的安全车速。此外，综合性的概率求解方案或虚拟目标跟踪框架通常需要显著更高的计算预算，因此在我们亚毫秒级的限制下进行直接的基线对比是不公平的。
+
+\subsection{风险势场与动能惩罚解耦}
+传统的人工势场法~\cite{khatib1986potential} 在轨迹优化中常构建虚拟斥力场来规避静态和动态障碍。然而，“距离越近排斥力越大”的传统空间排斥势能一旦置于狭窄且包含对向车流甚至实线隔离的双向盲区环境内，会因横向强避让力驱使车辆产生反复横摆的振荡轨迹，乃至使迭代规划器困于局部极小值死锁。PA-LOI 则将横向空间距离降格为纯粹的标量权重乘子（通过 Sigmoid 衰减），而彻底消除了位置维度上的梯度输出，转而构建以超额速度（即自车速度超出安全阈值 $v_{\text{safe}}$ 的部分）为唯一惩罚对象的专供损失函数。此设计的梯度阈值属性——当车速处于安全区间时梯度严格为零——使得有效压制超速与保留平稳轨迹两个目标得以兼容并行。
+
+% ============================================================
+% III. System Architecture
+% ============================================================
+\section{系统架构 (System Architecture)}
+
+在本文中，PA-LOI 被配置为主被动防御架构中的轻量化中间件。我们将其实例化部署于最先进的自动驾驶规划框架 MIND~\cite{mind2025}。原版 MIND 具备强大的多模态意图预测与交互决策能力，但并未内置针对长尾未知遮挡区域的风险推断机制。PA-LOI 被平行挂载于 MIND 核心的迭代线性二次调节器 (iLQR) 算法旁，其输出的特化风险代价直接进入主预测模块，并与下方的底层触发元件（如 常规 AEB）协同，从而填补了原系统在视野盲点防范上的空白。
+
+\subsection{基于物理降频衰减的威胁评估}
+为避免因识别到任意停止车辆即执行强制制动的过度保守行为，PA-LOI 首先构建了一套基于物理学基础判据的权重衰减与安全车速 ($v_{\text{safe}}$) 解析模型。
+
+当感知系统捕捉到路侧具备视线截断效应的静态物体时，PA-LOI 随即锚定一个朝向自车行驶车道的假想源提取点（Target Point），用以标定由于视线受阻可能突然出现的危险发生源位置。随后，分别计算自车顺车道前进直至抵达目标临界截面的到达预期时间（$TTA_{\text{ego}}$）。
+根据机制设定，该特定风险的紧迫权重 $w_{\text{base}}$ 表现为针对 $TTA_{\text{ego}}$ 的衰减函数——若估计自车抵达距离过远（即超过远场边界 $TTA_{\text{ego}} > 6.5\text{s}$），系统将其裁定为非即时接触威胁，强制设定 $w_{\text{base}} = 0$。需要强调的是，该 $\SI{6.5}{\second}$ 阈值并非经验预设，而是基于运动学物理界限与 ADAS 工程标准的严密推导：在测试设定的 \SI{8.0}{\meter\per\second} 最高行驶车速（约 30 km/h，为国际通用的城市视线遮挡区、居住区安全限速标准）下，将其平缓降至约 \SI{2.5}{\meter\per\second} 的防御脱困速度存在 \SI{5.5}{\meter\per\second} 的速度差。为确保乘客舒适度并避免乘员前倾（要求平均减速度维持在趋近 \SI{-1.0}{\meter\per\second\squared} 的区间，该数值完全处于 ISO 15622 适应性巡航 \SI{-3.5}{\meter\per\second\squared} 的舒适极限以内），纯物理运动学减速即需消耗 $\SI{5.5}{\second}$。更为关键的是，我们必须额外吸纳不可压缩的 $\SI{1.0}{\second}$ 系统综合延迟冗余，其由感知与多目标跟踪 (MOT) 收敛时间（约 0.3s）、控制通讯与规划结算延迟（约 0.2s）以及机械制动器的建压响应时间（约 0.5s）叠加而成。这 5.5s 的运动学耗时与 1.0s 的系统迟滞，恰好物理性地构成了这 $\SI{6.5}{\second}$ 的前置规划视界。而随着车辆持续迫近预警窗，$w_{\text{base}}$ 则开始逐步形成线性上升的响应梯度。
+在此之前，系统还设置了空间层面的前置筛选：若目标点已位于自车身后（纵向投影为负），或其横向距离超出当前车道动态走廊的外边界，则该候选风险源将被直接剔除，不参与后续的权重分配与势场构建。该筛选机制确保仅有处于自车前方且横向上具备物理交汇可能性的遮挡点才会进入代价函数。
+
+除此之外，为真正实现对通行效率和平顺性的双向保全，PA-LOI 第二道机制着眼于动态防守底线 $v_{\text{safe}}$ 的解算：
+通过获取当前障碍物掩体与自车轨迹中心线的待冲刺横向偏离物理距离 $d_{\text{ped}}$ ，并采用快走或慢跑的标准评估假设 $v_{\text{ped}} = \SI{2.0}{\meter\per\second}$，反向推导出行人完全横切暴露所需的跨界时间 $t_{\text{react}} = d_{\text{ped}} / v_{\text{ped}}$。为确保进入盲区的自车有充分余裕在场景设定的可用制动减速度 $a_{\text{max}}$ 的作用下于制动距离内刹停，自车被安全允许跨越该切面的最高物理速度界限为 $v_{\text{safe\_physics}} = a_{\text{max}} \cdot t_{\text{react}}$。
+
+这一公式设计具备天然的自适应调节特性：若当前车道本身十分宽阔（即由于 $d_{\text{ped}}$ 大而带来的反应冗余较长），则其演算获取的 $v_{\text{safe}}$ 指标将会自动放大至极宽容区间。结合后续引入的势场设计，当其阈值覆盖住自车当前合理的正常巡航速度时，就不会产生额外的降速约束拉扯，从而在机制根源上杜绝了对非敏感目标“幽灵刹车”动作的生成。
+此外，为防止在极端近距工况（$d_{\text{ped}}$ 极小）下物理公式输出过低的 $v_{\text{safe}}$ 而引发突兀的急制动，系统额外设置了双层防护机制。首先是舒适性阻尼边界 $v_{\text{safe}} \geq 0.6 \cdot v_{\text{ego}}$，确保单帧指令降速幅度不超过当前车速的 $40\%$，从而避免令乘员不适的突兀减速。二是绝对速度下限 $v_{\text{safe}} \geq \SI{2.0}{\meter\per\second}$，确保车辆始终维持最低通过能力而不会被锁定为完全静止。重要的是，由于系统以 \SI{10}{\hertz} 的频率闭环运行，舒适性边界会在连续的多帧中自然地向物理边界收敛：随着 PA-LOI 逐步降低 $v_{\text{ego}}$，舒适性阈值 $0.6 \cdot v_{\text{ego}}$ 也会同步缩小，从而允许基于物理推导的 $v_{\text{safe\_physics}}$ 在近距离内自动主导最终的安全速度包络，而无需设计显式的强行越权机制。
+
+\subsection{速度感知特化风险场 (Velocity-Aware Risk Field)}
+对于具备实际判定权重的视线遮挡目标点，PA-LOI 为其量身拟合了专门针对速度维度的累加梯度惩罚算子。被推入 iLQR 的预测轨迹 $\tau$ ，将在状态转移阵列中附加如式 (\ref{eq:risk_cost}) 所示的特化形式连续微分成本方程：
+\begin{equation}
+\begin{split}
+    C_{\text{risk}}(\tau) = w_{\text{base}} \sum_{t} \Big[ &\text{Sigmoid}(d_{\text{lat}}(t), k) \\
+    &\cdot \max(0,\, v_{\text{ego}}(t) - v_{\text{safe}})^2 \Big]
+\end{split}
+    \label{eq:risk_cost}
+\end{equation}
+
+该罚函数主要由双特征构成：
+1. **纯横向连续分布项 $\text{Sigmoid}(d_{\text{lat}})$**：该项基于惩罚点与自车之间的纯横向距离构建平滑衰减热力，距离越近惩罚权重越大。同时，系统以自车半宽 $w_{\text{ego}}/2$ 对横向净间距进行修正，确保惩罚起点从车身边缘而非车辆中心计量，使风险估算更贴近真实物理接触距离。
+2. **速度合页损失函数项 (Hinge-Loss Kinetic Energy) $ \max(0, v_{\text{ego}} - v_{\text{safe}})^2$**：这使得系统在处理该目标点时彻底摆脱空间强制排挤。由于引入了包含最大化比较操作的合页特性，如果在优化期间自车的迭代预测车速低于或恰好等于防线安全标界 $v_{\text{safe}}$ 时，不仅方程最终惩罚得分为零，其附随相对于车速的偏导数（Gradient）与二阶导（Hessian）均将同步闭合归零。正因缺乏惩罚反馈阻力，优化器允许轨迹平滑直穿行经隐匿掩体，有效遏制空间逃逸诱发的死锁。
+
+此外，PA-LOI 的惩罚函数在设计上不包含纵向距离衰减项——即势场沿行驶方向无限延伸（如图~\ref{fig:risk_field} 所示）。该设计的动机在于：对于基于多步预测的迭代优化器（如 iLQR），若势场仅覆盖有限纵向范围，优化器会利用超出势场边界后的零代价未来帧进行整体代价均摊，从而在尚未通过危险区域时便产生提前加速行为（Anticipatory Acceleration）。纵向无界的势场设计从根本上消除了这一优化漏洞；风险源仅在自车纵向里程完全越过目标切点后，由外部逻辑将其从活跃候选集中移除，车辆方可恢复正常加速规划。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/risk_field_academic.pdf}
+\caption{PA-LOI 速度感知风险场的热力分布示意图。Target Point 位于右侧停放遮挡物的邻车道侧前角。惩罚区域沿纵向无限延伸（图中因截取而有限显示），确保 iLQR 在整个预测窗口内均接收到超速惩罚的梯度信号。}
+\label{fig:risk_field}
+\end{figure}
+
+\subsection{底层 AEB 安全防线}
+PA-LOI 作为前置调节层为 AEB 提供速度缓冲。当碰撞预计时间 $TTC$ (Time-To-Collision) $\leq \SI{1.4}{\second}$ 时，底层 AEB 强制介入实施全力制动。本文将 AEB 可用的最大制动减速度设定为 $a_{\text{max}} = \SI{-4.0}{\meter\per\second\squared}$，该值显著低于干燥路面下的典型制动能力（$\SI{8}{\meter\per\second\squared}\sim\SI{10}{\meter\per\second\squared}$），旨在模拟雨雪等低附着系数极端路面条件，以此检验系统在最不利物理约束下的防护能力。前述 $v_{\text{safe}}$ 的推导同样基于该保守设定，确保安全车速包络与场景假定的可用制动力始终匹配。
+
+% ============================================================
+% IV. Experimental Setup
+% ============================================================
+\section{实验评估与部署环境 (Experimental Setup)}
+
+所有仿真实验及计算耗时测量均在配备 Apple M3 芯片（8核，4性能核 + 4效能核）、16\,GB 统一内存的 MacBook Air 上完成，不依赖任何外部 GPU 加速。
+
+\subsection{仿真环境与典型测试场景}
+实验基于 Argoverse 2~\cite{argoverse2} 仿真环境，以 \SI{10}{\hertz} 的闭环频率运行。我们构建了两类典型的遮挡横穿测试场景（如图~\ref{fig:scenarios}）：
+\begin{enumerate}
+    \item \textbf{直道连续停车场景}（图~\ref{fig:scenarios}a）：道路右侧存在连续停放的大型车辆，形成较长的遮挡区域。自车以约 \SI{8.0}{\meter\per\second} 的巡航速度行驶。
+    \item \textbf{路口遮挡场景}（图~\ref{fig:scenarios}b）：典型城市十字路口，因排队等候车辆在路口形成多处视线遮挡区域，自车以较低速度通过。
+\end{enumerate}
+
+\begin{figure}[ht]
+    \centering
+    \subfloat[Straight road]{\includegraphics[width=0.48\columnwidth]{figures/straight_road.png}}
+    \hfill
+    \subfloat[Complex intersection]{\includegraphics[width=0.48\columnwidth]{figures/intersection.png}}
+    \caption{两类代表性的遮挡横穿挑战场地。(a) 右侧带较深连续静止车辆停放的高速路段环境。(b) 由于相邻路权道拥堵带来的典型拥挤十字路口内部车流视野截断。}
+    \label{fig:scenarios}
+\end{figure}
+
+本系列测试的触发条件参考了 CPNA 标准测试规范，设计为当自车越过触发预先设定的关键物理间距 ($d_{\text{trigger}}$) 后的下一个执行帧内，目标隐蔽行人即刻以 \SI{2.0}{\meter\per\second} 的横向速度斜切进自车行驶车道并停留于车道内。该设置确保除非自车已提前完成预防性减速，否则在物理上无法避免与行人的几何碰撞。
+
+\subsection{评估系统控制组}
+为全面展示该系统在动态场景中的优势，实验包含如下评估基线配置：
+1. \textbf{原生架构 (Vanilla MIND)}：未经修改的原版 MIND 框架~\cite{mind2025}，不包含任何遮挡感知或主动减速模块，作为评测基线。
+2. \textbf{纯 AEB 模式 (AEB Only)}：在原生规划器输出端附加反应式 AEB，当 $TTC \leq \SI{1.4}{\second}$ 时以 \SI{-4.0}{\meter\per\second\squared} 的固定减速度实施紧急制动。
+3. \textbf{主被动联合 (PA-LOI + AEB)}：在规划层集成本文提出的 PA-LOI 模块，同时保留底层 AEB 作为最终安全防线。
+4. \textbf{保守基线 (Conservative WCA)}：基于责任敏感安全模型 (RSS)~\cite{shalev2017rss} 的最坏情况假设构建的极端保守基线。该配置假定所有遮挡区域均存在即时横穿威胁，在任何可能的交汇点前均强制将车速降至安全停车速度以下，代表了安全性上界但牺牲了通行效率。
+
+% ============================================================
+% V. Results
+% ============================================================
+\section{实验评估结果与研讨 (Experimental Results)}
+
+\subsection{各测试场景下的定量碰撞衰减评估}
+两组测试场景的详细定量评估结果分别列于表~\ref{tab:results_intersection} 和表~\ref{tab:results_straight}。
+
+\begin{table}[htbp]
+\caption{多变路口场景避让效能评估结果}
+\label{tab:results_intersection}
+\centering
+\renewcommand{\arraystretch}{1.15}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{cc|cc|cc|cc|cc}
+\toprule
+\multirow{2}{*}{\shortstack{$d_{\text{trigger}}$\\(m)}} & 
+\multirow{2}{*}{\shortstack{$d_{\text{bumper}}$\\(m)}} & 
+\multicolumn{2}{c|}{Vanilla} & 
+\multicolumn{2}{c|}{AEB Only} & 
+\multicolumn{2}{c|}{PA-LOI+AEB} &
+\multicolumn{2}{c}{Cons.\ WCA} \\
+& & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ \\
+\midrule
+3.0 & 0.75 & \cmark & 4.59 & \cmark & 3.99 & \cmark & 2.94 & \xmark & -- \\
+3.5 & 1.25 & \cmark & 4.53 & \cmark & 3.96 & \cmark & 2.79 & \xmark & -- \\
+4.0 & 1.75 & \cmark & 4.57 & \cmark & 3.46 & \cmark & 2.33 & \xmark & -- \\
+4.3 & 2.05 & \cmark & 4.55 & \cmark & 2.88 & \cmark & 1.62 & \xmark & -- \\
+4.5 & 2.25 & \cmark & 4.49 & \cmark & 2.88 & \xmark & -- & \xmark & -- \\
+5.0 & 2.75 & \cmark & 4.60 & \cmark & 2.15 & \xmark & -- & \xmark & -- \\
+5.5 & 3.25 & \cmark & 4.66 & \xmark & -- & \xmark & -- & \xmark & -- \\
+\bottomrule
+\end{tabular}
+}
+\vspace{1mm}
+\footnotesize{注：Col. 标示碰撞是否发生 (\cmark: 产生物理穿透, \xmark: 成功安全规避); $v_{\text{imp}}$ 反映碰撞实际留存末端速度 (m/s).}
+\end{table}
+
+\begin{table}[htbp]
+\caption{直道长距离视线阻隔测试通过率与衰减对比}
+\label{tab:results_straight}
+\centering
+\renewcommand{\arraystretch}{1.15}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{cc|cc|cc|cc|cc}
+\toprule
+\multirow{2}{*}{\shortstack{$d_{\text{trigger}}$\\(m)}} & 
+\multirow{2}{*}{\shortstack{$d_{\text{bumper}}$\\(m)}} & 
+\multicolumn{2}{c|}{Vanilla} & 
+\multicolumn{2}{c|}{AEB Only} & 
+\multicolumn{2}{c|}{PA-LOI+AEB} &
+\multicolumn{2}{c}{Cons.\ WCA} \\
+& & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ \\
+\midrule
+3.0 & 0.75 & \cmark & 7.75 & \cmark & 7.67 & \cmark & 2.26 & \xmark & -- \\
+3.5 & 1.25 & \cmark & 7.75 & \cmark & 7.27 & \cmark & 1.23 & \xmark & -- \\
+4.0 & 1.75 & \cmark & 7.75 & \cmark & 7.27 & \xmark & -- & \xmark & -- \\
+4.5 & 2.25 & \cmark & 7.75 & \cmark & 6.87 & \xmark & -- & \xmark & -- \\
+5.0 & 2.75 & \cmark & 7.75 & \cmark & 6.39 & \xmark & -- & \xmark & -- \\
+\bottomrule
+\end{tabular}
+}
+\vspace{1mm}
+\footnotesize{注：Conservative WCA 在所有工况下均因极端保守的速度策略而未发生碰撞。}
+\end{table}
+
+\subsection{对于制动边界的安全扩展验证}
+实验数据表明，单独部署 AEB（AEB Only）在高速直道场景中存在明显的防护局限。在约 \SI{7.75}{\meter\per\second} 的初始车速下，由运动学制动公式 $d_{\text{brake}} = v^2 / (2a_{\text{max}})$ 计算可得最小制动距离约为 $\SI{7.51}{\meter}$，这远超本次实验预设的 2 至 4 米触发距离范围，因此单独 AEB 在该场景下的所有测试中均无法避免碰撞。
+
+引入 PA-LOI 后，系统展现出显著的安全余量扩展：在路口场景中，PA-LOI+AEB 将实现零碰撞所需的最小触发距离从单独 AEB 的 \SI{3.25}{\meter} 缩减至 \SI{2.25}{\meter}，安全缓冲距离改善约 \textbf{31\%}。在高速直道场景中，PA-LOI+AEB 在 \SI{1.75}{\meter} 触发距离下仍可实现零碰撞，而单独 AEB 在所有测试距离下均未能避免碰撞。即使在最极端的 \SI{3.0}{\meter} 近距触发工况下碰撞不可避免，PA-LOI 仍通过前置降速将碰撞末速从 \SI{7.75}{\meter\per\second} 降至 \SI{2.26}{\meter\per\second}，碰撞动能降低约 \textbf{91\%}。图~\ref{fig:generalization} 展示了面对不同行人横穿速度时该系统的泛化防护表现。
+
+值得注意的是，Conservative WCA 虽然在所有工况下均可实现零碰撞，但其代价是对所有遮挡区域采取无差别强制减速，这在正常交通流中将严重降低通行效率（即使在没有实际威胁的情况下，它也频繁导致车辆近乎完全刹停）。相比之下，PA-LOI 在安全性与通行效率之间实现了更为有利的折中：与未修改的基线相比，以仅新增 \SI{0.55}{\milli\second} 的计算开销和不到 \SI{1}{\second} 的总体通行时间增加为代价，它提供了接近保守基线的安全收益，且无需承受严重的交通中断惩罚。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/speed_generalization.pdf}
+\caption{不同行人横穿速度下 PA-LOI+AEB 的安全缓冲距离变化趋势，验证了该方案对行人速度变量的鲁棒性。}
+\label{fig:generalization}
+\end{figure}
+
+\subsection{计算开销与误报抑制}
+验证系统在无真实威胁时不会引发过度减速（即误报抑制能力）同样至关重要。在无行人出现的空旷路段测试中，得益于 $v_{\text{safe}}$ 的自适应宽松特性与合页损失在安全速度以下的零梯度属性，自车未出现明显的异常减速或轨迹扰动。系统仅在接近遮挡交汇点时将车速平缓降至 \SI{2.72}{\meter\per\second}（峰值减速度仅为 \SI{-1.09}{\meter\per\second\squared}，处于乘员几乎无感知的舒适区间），全程通行时间增加不超过 \SI{1}{\second}。
+在计算开销方面，PA-LOI 模块单帧新增耗时仅约 \SI{0.55}{\milli\second}（亚毫秒级），可满足自动驾驶领域主流 $10\sim\SI{20}{\hertz}$ 闭环控制的实时性需求。
+
+% ============================================================
+% VI. 讨论与局限性 (Discussion)
+% ============================================================
+\section{讨论与局限性 (Discussion \& Limitations)}
+
+实验结果表明，在反应式 AEB 制动基础上叠加前馈式的主动速度管理，可在保持正常通行效率的同时显著扩展系统的安全制动包络。这种"前馈降能 + 反应式制动"的双层协同架构，为解决 CPNA 等遮挡横穿类极端场景提供了一条有效的技术路径。
+
+本方法目前存在以下局限：(1) 风险点的锚定依赖于对静态遮挡物的准确检测与定位，尚未考虑动态遮挡物（如行驶中的大型车辆）的处理；(2) 尽管实验表明系统在 $1.0\sim\SI{3.0}{\meter\per\second}$ 的行人速度范围内表现稳定（如图~\ref{fig:generalization} 所示），但尚未针对骑行等极端高速横穿模式（$>\SI{5.0}{\meter\per\second}$）进行验证，此类场景可能超出当前安全缓冲的覆盖范围；(3) 实验仅在仿真环境中进行了验证，尚需在实车平台上进一步评估。未来工作可结合 V2X 通信或非视距感知技术扩展遮挡信息来源，并引入行人意图预测模型以提升 $v_{\text{safe}}$ 估算的精度。
+
+此外，关于实验配置方面，本研究将 AEB 可用的制动减速度限制在 \SI{-4.0}{\meter\per\second\squared}，旨在模拟具有挑战性的低附着力路面条件（如雨雪天气）。尽管现代 AEB 系统在干燥的高附着力路面上能够爆发出高达 \SI{-8.0}{\meter\per\second\squared} 的制动力（这通常足以独立避免碰撞），但 PA-LOI 的主动车速管理在这些理想环境下依然具有极高的价值。通过平滑地预先衰减行进车速，PA-LOI 能够将原本极其剧烈、严重影响乘员体验的紧急制动事件，转化为更为温和柔顺的减速曲线，从而在日常驾驶场景中显著提升乘坐舒适感与乘员的系统信任度。
+
+% ============================================================
+% VII. 结论 (Conclusion)
+% ============================================================
+\section{结论 (Conclusion)}
+
+本文提出了 PA-LOI，一种面向视线受阻横穿场景的轻量化主动速度管理框架。该方法通过基于 TTA 的物理可达性评估动态界定安全车速，并以速度解耦的合页损失代价函数替代传统空间排斥势场，在避免轨迹振荡与优化死锁的同时实现了对盲区交汇前车速的平滑抑制。实验表明，PA-LOI 协同 AEB 可将安全缓冲距离改善约 \textbf{31\%}，并在最恶劣工况下将碰撞动能降低约 \textbf{91\%}，同时保持单帧仅 \SI{0.55}{\milli\second} 的极低计算开销。该框架可作为独立模块嵌入现有规划架构，为城市复杂环境下的遮挡行人防护提供了一种高效且实用的前置风控方案。
+
+% ============================================================
+% Acknowledgments
+% ============================================================
+% --- Anonymized Acknowledgments for Double-Blind Review ---
+% \section*{Acknowledgment}
+% Acknowledgments and AI disclosure statements are temporarily withheld to preserve double-blind review integrity.
+% --- End Anonymized Block ---
+
+% --- Original Acknowledgments (Keep Commented for Initial Submission) ---
+% \section*{致谢 (Acknowledgment)}
+% 作者感谢使用大型语言模型 (Claude, Anthropic) 协助开发期间的实验脚本调试，以及在稿件准备期间协助语言翻译、编辑和学术格式化。所有核心算法设计、实验方法、数据分析和科学结论均由作者独立主导完成。作者对本出版物的准确性和原创性承担全部责任。
+% --- End Original Block ---
+
+% ============================================================
+% References
+% ============================================================
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

@@ -18,7 +18,7 @@ DEBUG_LOG = []
 # === 全局开关：鬼探头检测 ===
 # True = 启用鬼探头检测（对所有关卡生效）
 # False = 禁用鬼探头检测（对所有关卡生效）
-ENABLE_GHOST_PROBE = False
+ENABLE_GHOST_PROBE = True
 ENABLE_AEB = True
 
 # === 全局开关：实验数据记录 ===
@@ -55,6 +55,8 @@ class MINDPlanner:
         self.aeb_active = False
         self.aeb_level = None           # 'WARNING', 'DANGER', 'CRITICAL'
         self.aeb_downgrade_count = 0
+        self.aeb_delay_counter = 0      # AEB 响应延迟计数器（模拟传感器确认+液压建压）
+        self.AEB_DELAY_FRAMES = 0       # 延迟帧数: 0 = 无延迟
 
         with open(config_dir, 'r') as file:
             self.planner_cfg = json.load(file)
@@ -266,7 +268,7 @@ class MINDPlanner:
         # RSS 参数
         AEB_T_RESPONSE = 0.2        # 系统响应延迟 (s)
         AEB_A_MAX_BRAKE = 4.0       # 最大制动减速度 (m/s²)
-        AEB_TTC_CRITICAL = 0.8      # 全力制动阈值 (s)
+        AEB_TTC_CRITICAL = 1.4      # 全力制动阈值 (s) [v58: 0.8→1.4，修复横穿行人场景]
         AEB_TTC_DANGER = 1.6        # 部分制动阈值 (s)
         AEB_TTC_WARNING = 2.6       # 预警减速阈值 (s)
         AEB_LAT_STATIC = 1.2        # 静态障碍物横向阈值 (m)
@@ -338,6 +340,13 @@ class MINDPlanner:
                     exo_long_v = exo_vel[0] * cos_h + exo_vel[1] * sin_h
                     approach_speed = ego_v - exo_long_v  # 正值表示在接近
                     
+                    # [PA-LOI v58] 横穿行人修正：
+                    # 行人横穿马路时纵向速度≈0，但Ego仍在全速冲过去
+                    # 此时 approach_speed ≈ ego_v 才是正确的碰撞接近速度
+                    # 对于在碰撞路径内的行人，取 max(approach_speed, ego_v)
+                    if is_pedestrian and abs(lat_dist) < 2.0 and approach_speed < ego_v:
+                        approach_speed = ego_v
+                    
                     if approach_speed <= 0.01:
                         continue  # 没有在接近，不构成威胁
                     
@@ -345,7 +354,13 @@ class MINDPlanner:
                     
                     # --- 分级判断 ---
                     level = None
-                    if ttc < AEB_TTC_CRITICAL:
+                    
+                    # [PA-LOI v58] 必撞检测 (Inevitable Collision Check)
+                    # 如果纵向距离 < 当前速度的物理刹停距离，无论 TTC 多少，直接全力制动
+                    braking_dist = (ego_v ** 2) / (2 * AEB_A_MAX_BRAKE)
+                    if long_dist < braking_dist and long_dist < 6.0:
+                        level = 'CRITICAL'  # 必撞 → 全力制动
+                    elif ttc < AEB_TTC_CRITICAL:
                         level = 'CRITICAL'
                     elif ttc < AEB_TTC_DANGER:
                         level = 'DANGER'
@@ -384,47 +399,14 @@ class MINDPlanner:
                     self.aeb_active = True
                     if DEBUG_LOG_ENABLED:
                         print(f"\033[91m [AEB ON] t={lcl_smp.ego_agent.timestep * 0.1:.2f}s | {best_reason} \033[0m")
-            else:
-                # 无威胁
-                if self.aeb_active:
-                    should_release = False  # [Fix] 这里的 False 是绝对兜底的默认值
-                    release_reason = "Checking..."
-                    
-                    # (targets 逻辑... 假设我们用 self._last_risk_sources 作为 targets 的替代品)
-                    # 实际上这里应该有更复杂的 targets 寻找逻辑，但为了修复 UnboundLocalError，
-                    # 我们只需要保证 should_release 存在即可。
-                    # 原来的逻辑似乎依赖 targets 变量，但它在该 scope 未定义。
-                    # 我们假设如果没有 targets，就走释放逻辑。
-                    
-                    # [PA-LOI] 简单粗暴的修复：
-                    # 如果车已经停稳，释放刹车
-                    if ego_v < 0.3:
-                        should_release = True
-                        release_reason = f"Stopped (v={ego_v:.2f}m/s)"
-                    elif self.aeb_level == 'CRITICAL':
-                        # [PA-LOI] CRITICAL 锁定
-                        should_release = False
-                        release_reason = "CRITICAL LOCK"
-                    else:
-                        # 既没停稳，也没锁定，那就释放
-                        should_release = True
-                        release_reason = "No threat"
-
-                    if should_release:
-                        self.aeb_level = None
-                        # self.aeb_active = False # Don't reset active immediately to prevent oscillation
+            # [PA-LOI v58] AEB 一旦触发过，永不释放，永远刹停
+            # 不需要任何释放逻辑
             
             # ==========================================
-            # 1. 先执行分级制动 (AEB 拥有绝对覆写权)
+            # 1. AEB 绝对覆写：触发过就永远全力制动
             # ==========================================
-            if self.aeb_active and self.aeb_level is not None:
-                if self.aeb_level == 'CRITICAL':
-                    ret_ctrl = np.array([-4.0, 0.0])  # 全力制动
-                elif self.aeb_level == 'DANGER':
-                    ret_ctrl[0] = -2.0                # 部分制动
-                elif self.aeb_level == 'WARNING':
-                    if ret_ctrl[0] > -0.8:
-                        ret_ctrl[0] = -0.8            # 预警减速
+            if self.aeb_active:
+                ret_ctrl = np.array([-4.0, 0.0])
             
             # ==========================================
             # 2. [PA-LOI v57 Final] 预测性运动学钳位 (Predictive Kinematic Clamp)
@@ -573,8 +555,8 @@ class MINDPlanner:
             # Max Aggregation: 取所有风险源中最大的那个 Cost
             node_max_costs, _ = torch.max(raw_costs, dim=1) # [N]
             
-            # Sum over trajectory
-            risk_cost = node_max_costs.sum().item()
+            # [v55] Max over trajectory: 只取最危险节点的峰值，避免多车累加导致过度降速
+            risk_cost = node_max_costs.max().item() * n_nodes  # 乘以 n_nodes 抵消后面的 /n_nodes 归一化
         
         total_cost = (comfort_cost + efficiency_cost + target_cost + risk_cost) / n_nodes
         
