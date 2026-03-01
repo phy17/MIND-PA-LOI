@@ -260,7 +260,29 @@ It is worth noting that while Conservative WCA achieved zero collisions under al
 
 \subsection{Computational Overhead and False Alarm Suppression}
 Verifying the system's ability against inducing excessive deceleration (i.e., false alarm suppression capability) in the absence of actual threats is also important. In empty road segment tests without emerging pedestrians, thanks to the adaptive leniency of $v_{\text{safe}}$ and the zero-gradient property of the Hinge-Loss below the safe threshold, the ego-vehicle exhibited no discernible abnormal braking or erratic trajectory disturbances. The system merely moderated speeds smoothly down to \SI{2.72}{\meter\per\second} when approaching the occluded junction line (with peak deceleration bounded at merely \SI{-1.09}{\meter\per\second\squared}, well within a comfortable range for passengers), causing an overall transit time increase of less than \SI{1}{\second}.
-Regarding computational consumption, the PA-LOI module registers an additional per-frame cost of mere \SI{0.55}{\milli\second} (sub-millisecond level), meeting the real-time requirements of typical $10\sim\SI{20}{\hertz}$ closed-loop autonomous driving systems.
+regarding computational consumption, the PA-LOI module registers an additional per-frame cost of mere \SI{0.55}{\milli\second} (sub-millisecond level), meeting the real-time requirements of typical $10\sim\SI{20}{\hertz}$ closed-loop autonomous driving systems.
+
+\subsection{Ablation Study on System Components}
+To validate component necessity, an ablation study was conducted at a \SI{4.5}{\meter} trigger distance, with results summarized in Table~\ref{tab:ablation}. 
+(1) \textbf{w/o TTA Screening}: Removing the temporal bounds causes degeneration into a static spatial field, inducing an extreme ``freeze-robot'' anomaly. The ego-vehicle prematurely engaged deceleration at \SI{16.6}{\meter} and crawled at $\sim\SI{2.0}{\meter\per\second}$ with increased steering oscillations, failing to even reach the trigger zone within the \SI{6.0}{\second} transit window. This over-conservatism severely degrades traffic efficiency. 
+(2) \textbf{w/o Hinge-Loss}: Replacing the velocity-decoupled Hinge-Loss with a constant spatial penalty deprives the optimizer of a ``deceleration gradient incentive.'' Since spatial penalties do not decay with lower speeds, the vehicle refuses to proactively decelerate, maintaining a high speed of \SI{4.42}{\meter\per\second} until a forced panic brake at merely \SI{5.1}{\meter}. This kinematic deficit resulted in an inevitable collision at \SI{2.50}{\meter\per\second}. 
+These results prove that TTA is indispensable for maintaining temporal efficiency, while Hinge-Loss provides the critical optimization incentive for proactive deceleration.
+
+\begin{table}[htbp]
+\caption{Ablation Study Results at \SI{4.5}{\meter} Trigger Distance}
+\label{tab:ablation}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metrics} & \textbf{Full PA-LOI} & \textbf{w/o TTA} & \textbf{w/o Hinge-Loss} \\
+\midrule
+Collision Avoidance & \textbf{Safe} & Safe (Timeout) & \textcolor{red}{\textbf{Collided}} (\SI{2.50}{\meter\per\second}) \\
+First Brake Dist.   & \textbf{12.2 m} & 16.6 m (Early) & \textcolor{red}{5.1 m (Late)} \\
+Min Velocity        & \textbf{0.14 m/s} & 2.03 m/s & 0.82 m/s \\
+Steering Jerk Std.  & \textbf{1.00} & 1.07 (+7\%) & 1.09 (+9\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 % ============================================================
 % VI. Discussion & Limitations
