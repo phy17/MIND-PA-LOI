@@ -1,4 +1,6 @@
 \documentclass[conference]{IEEEtran}
+\usepackage{cmap} % Fix for PDF searchability
+\usepackage[T1]{fontenc} % Fix for PDF searchability
 \IEEEoverridecommandlockouts
 
 \usepackage{cite}
@@ -11,9 +13,13 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{siunitx}
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
 \usepackage{pifont}
 \usepackage[caption=false,font=footnotesize]{subfig}
+
+% Fix margins to match Papercept requirements: 
+% Top=0.75in, Bottom=1.0in, Left=0.75in, Right=0.75in
+\usepackage[letterpaper, top=0.75in, bottom=1.0in, left=0.75in, right=0.75in]{geometry}
 
 % Checkmark and crossmark
 \newcommand{\cmark}{\ding{51}}
@@ -24,7 +30,7 @@
 
 \begin{document}
 
-\title{Velocity-Aware Risk Field for Proactive Occluded Pedestrian Collision Avoidance}
+\title{\vspace{0.25in}PA-LOI: Velocity-Aware Risk Field for Proactive Occluded Pedestrian Collision Avoidance}
 
 % --- Anonymized Author Block for Double-Blind Review ---
 \author{\IEEEauthorblockN{Primary Author}
@@ -41,8 +47,9 @@ email anonymized}
 % Abstract
 % ============================================================
 \begin{abstract}
-Occluded Pedestrian Crossing scenarios---where pedestrians suddenly emerge from behind visual obstructions---pose a severe safety threat to autonomous driving systems. Since traditional reactive Automatic Emergency Braking (AEB) systems only initiate responses after sensors directly observe the pedestrian, their braking force is often insufficient to avoid collisions at typical urban driving speeds due to inadequate physical braking distance. In this paper, we propose PA-LOI (Proactive Anticipation via Latent Occlusion Inference). Functioning as a computationally efficient and modular risk-aware planning layer, this method proactively reduces the ego-vehicle's speed when traversing high-risk occluded regions based on a physical reachability model \emph{before} detecting the actual pedestrian. This study discards the traditional spatial obstacle avoidance potential field paradigm and instead designs a ``Velocity-Aware Hinge-Loss Cost Function'' for potential occluded areas. PA-LOI not only significantly reduces the ego-vehicle's initial kinetic energy upon reaching the critical intersection point---thereby physically expanding the downstream AEB system's braking safety redundancy---but also effectively avoids trajectory oscillation and local deadlock problems inherent in traditional spatial potential fields through the derivative characteristics of the hinge function. We validated the system in two typical high-risk scenarios constructed using the Argoverse 2 dataset: a complex intersection and a consecutive parked vehicle array on a straight road. In the intersection tests, PA-LOI combined with AEB achieved zero collisions when pedestrians appeared at a longitudinal clearance of only \SI{2.25}{\meter}, improving the required safety distance by \textbf{31\%} compared to the \SI{3.25}{\meter} needed by standard AEB. In the high-speed straight road scenario where AEB alone completely failed, the joint architecture still prevented collisions at a \SI{1.75}{\meter} clearance and reduced the collision kinetic energy in the worst-case scenario by approximately \textbf{91\%} (collision speed reduced from \SI{7.75}{\meter\per\second} to \SI{2.26}{\meter\per\second}).
+Occluded Pedestrian Crossing scenarios---where pedestrians suddenly emerge from behind visual obstructions---pose a severe safety challenge for autonomous driving. Reactive AEB alone often fails because line-of-sight sensors detect the pedestrian only after emergence, leaving insufficient braking distance at urban speeds. We propose PA-LOI (Proactive Anticipation via Latent Occlusion Inference), a lightweight, modular risk-aware planning layer that proactively reduces the ego-vehicle's speed when traversing high-risk occluded regions \emph{before} any pedestrian is detected, based on a physical reachability model. Unlike traditional spatial potential fields that suffer from trajectory oscillation and local deadlocks, PA-LOI introduces a Velocity-Aware Hinge-Loss cost function that penalizes only the excess speed above a dynamically computed safe threshold, yielding smooth deceleration with zero residual gradient once safe. We validate PA-LOI in two Euro NCAP CPNA-representative scenarios built on the Argoverse 2 dataset. In the intersection scenario, PA-LOI+AEB achieves zero collisions at a pedestrian clearance of only \SI{2.25}{\meter}, improving the safety margin by \textbf{31\%} over standalone AEB. In the high-speed straight road scenario where AEB alone completely fails, PA-LOI reduces worst-case collision kinetic energy by approximately \textbf{91\%}. The module adds merely \SI{0.55}{\milli\second} per planning frame, meeting real-time deployment requirements.
 \end{abstract}
+
 
 \begin{IEEEkeywords}
 Automatic Emergency Braking, Autonomous Driving, Euro NCAP CPNA, Occluded Pedestrian Crossing, Occlusion-Aware Planning, Risk Field
@@ -107,7 +114,7 @@ Summing the \SI{5.5}{\second} kinematic phase and the \SI{1.0}{\second} latency 
 Before this, the system sets an upstream screening mechanism at the spatial level: if the target point is already located behind the ego-vehicle (negative longitudinal projection) or its lateral distance exceeds the outer boundary of the current lane's dynamic corridor, this candidate risk source will be directly discarded without participating in subsequent weight allocation and potential field construction. This screening mechanism ensures that only occlusion points located ahead of the ego vehicle and possessing lateral physical intersection possibilities will enter the cost function.
 
 Furthermore, to jointly preserve traffic efficiency and ride smoothness, PA-LOI's second mechanism focuses on calculating the dynamic defense baseline $v_{\text{safe}}$:
-By acquiring the lateral physical deviation distance $d_{\text{ped}}$ that the pedestrian needs to dash from the current obstacle cover to the ego-vehicle's trajectory centerline, and adopting a standard evaluation assumption of a brisk walking or jogging speed $v_{\text{ped}} = \SI{2.0}{\meter\per\second}$, the cross-boundary time $t_{\text{react}} = d_{\text{ped}} / v_{\text{ped}}$ required for the pedestrian to be fully exposed is computed accordingly. To ensure the ego-vehicle entering the blind spot has sufficient margin to brake to a halt within the braking distance under the scenario-defined available braking deceleration $a_{\text{max}}$, the highest physical speed limit safely permitted for the ego-vehicle to cross this slice is $v_{\text{safe\_physics}} = |a_{\text{max}}| \cdot t_{\text{react}}$.
+By acquiring the lateral physical deviation distance $d_{\text{ped}}$ that the pedestrian needs to traverse from the current obstacle cover to the ego-vehicle's trajectory centerline, and adopting a standard evaluation assumption of a brisk walking or jogging speed $v_{\text{ped}} = \SI{2.0}{\meter\per\second}$, the cross-boundary time $t_{\text{react}} = d_{\text{ped}} / v_{\text{ped}}$ required for the pedestrian to be fully exposed is computed accordingly. To ensure the ego-vehicle entering the blind spot has sufficient margin to brake to a halt within the braking distance under the scenario-defined available braking deceleration $a_{\text{max}}$, the highest physical speed limit safely permitted for the ego-vehicle to cross this slice is $v_{\text{safe\_physics}} = |a_{\text{max}}| \cdot t_{\text{react}}$.
 
 This design has a natural adaptive property: if the current lane itself is very wide (meaning a long reaction redundancy brought by a large $d_{\text{ped}}$), the calculated $v_{\text{safe}}$ will automatically relax to a permissive level. Combined with the subsequently introduced potential field design, when its threshold covers the ego-vehicle's current reasonable cruising speed, no additional deceleration constraint will be generated, effectively suppressing ``phantom braking'' towards non-threatening targets.
 
@@ -124,10 +131,12 @@ For line-of-sight occluded target points with non-zero risk weights, PA-LOI cons
 \end{equation}
 
 This penalty function is primarily composed of dual features:
-1. \textbf{Pure Lateral Continuous Distribution Term $\text{Sigmoid}(d_{\text{lat}})$}: This term constructs a smooth decaying heat based on the pure lateral distance between the penalty point and the ego-vehicle; closer distances carry larger penalty weights. Simultaneously, the system corrects the lateral net clearance using the ego-vehicle half-width $w_{\text{ego}}/2$, ensuring the penalty origin is measured from the vehicle edge rather than the vehicle center, making risk estimation closer to true physical contact distance.
-2. \textbf{Velocity Hinge-Loss Kinetic Energy Term $ \max(0, v_{\text{ego}} - v_{\text{safe}})^2$}: This allows the system to completely eliminate spatial forced expulsion when handling this target point. Due to the introduction of the hinge characteristic containing a maximization comparison operation, if the ego-vehicle's iteratively predicted speed during optimization is lower than or exactly equal to the defensive safe boundary $v_{\text{safe}}$, not only does the final penalty score of the equation zero out, but its partial derivatives and second derivatives with respect to vehicle speed are identically zero. Because of the lack of penalty feedback resistance, the optimizer permits the trajectory to smoothly traverse straight past hidden covers, effectively curbing deadlocks induced by spatial evasion.
+\begin{enumerate}
+    \item \textbf{Pure Lateral Continuous Distribution Term $\text{Sigmoid}(d_{\text{lat}})$}: This term constructs a smooth decaying heat based on the pure lateral distance between the penalty point and the ego-vehicle; closer distances carry larger penalty weights. Simultaneously, the system corrects the lateral net clearance using the ego-vehicle half-width $w_{\text{ego}}/2$, ensuring the penalty origin is measured from the vehicle edge rather than the vehicle center, making risk estimation closer to true physical contact distance.
+    \item \textbf{Velocity Hinge-Loss Kinetic Energy Term $ \max(0, v_{\text{ego}} - v_{\text{safe}})^2$}: This allows the system to completely eliminate spatial forced expulsion when handling this target point. Due to the introduction of the hinge characteristic containing a maximization comparison operation, if the ego-vehicle's iteratively predicted speed during optimization is lower than or exactly equal to the defensive safe boundary $v_{\text{safe}}$, not only does the final penalty score of the equation zero out, but its partial derivatives and second derivatives with respect to vehicle speed are identically zero. Because of the lack of penalty feedback resistance, the optimizer permits the trajectory to smoothly traverse straight past hidden covers, effectively curbing deadlocks induced by spatial evasion.
+\end{enumerate}
 
-Additionally, PA-LOI's penalty function is designed without a longitudinal distance decay term---meaning the potential field extends infinitely along the driving direction (as shown in Fig.~\ref{fig:risk_field}). The motivation for this design is: for iterative optimizers based on multi-step prediction (such as iLQR), if the potential field only covers a limited longitudinal range, the optimizer will utilize zero-cost future frames beyond the potential field boundary for overall cost amortization, generating Anticipatory Acceleration behaviors before even passing through the danger zone. The longitudinally unbounded potential field design fundamentally eliminates this optimization loophole; only after the ego-vehicle's longitudinal position completely passes the target tangent point does external logic remove the risk source from the active candidate set, allowing the vehicle to resume normal acceleration planning.
+Additionally, PA-LOI's penalty function is designed without a longitudinal distance decay term---meaning the potential field extends infinitely along the driving direction (as shown in Fig.~\ref{fig:risk_field}). The motivation for this design is: for iterative optimizers based on multi-step prediction (such as iLQR), if the potential field only covers a limited longitudinal range, the optimizer will utilize zero-cost future frames beyond the potential field boundary for overall cost amortization, generating anticipatory acceleration behaviors before even passing through the danger zone. The longitudinally unbounded potential field design fundamentally eliminates this optimization loophole; only after the ego-vehicle's longitudinal position completely passes the target tangent point does external logic remove the risk source from the active candidate set, allowing the vehicle to resume normal acceleration planning.
 
 \begin{figure}[htbp]
 \centering
@@ -145,13 +154,13 @@ PA-LOI serves as a feedforward regulation layer providing a velocity buffer for 
 % ============================================================
 \section{Experimental Setup}
 
-All simulation experiments and computational latency measurements were completed on a MacBook Air equipped with an Apple M3 chip (8 cores: 4 performance cores + 4 efficiency cores) and 16\,GB unified memory, without relying on any external GPU acceleration.
+All simulation experiments and computational latency measurements were executed on an Apple M3 processor (8 cores: 4 performance + 4 efficiency) with 16\,GB unified memory, without relying on any external GPU acceleration.
 
 \subsection{Simulation Environment and Typical Test Scenarios}
 The experiments are based on the Argoverse 2~\cite{argoverse2} simulation environment, running at a closed-loop frequency of \SI{10}{\hertz}. We construct two typical categories of occluded crossing test scenarios (as shown in Fig.~\ref{fig:scenarios}):
 \begin{enumerate}
     \item \textbf{Straight Road Consecutive Parking Scenario} (Fig.~\ref{fig:scenarios}a): Consecutively parked large vehicles exist on the right side of the road, forming a long occlusion zone. The ego-vehicle travels at a cruising speed of approximately \SI{8.0}{\meter\per\second}.
-    \item \textbf{Intersection Occlusion Scenario} (Fig.~\ref{fig:scenarios}b): A typical urban intersection where waiting queues form multiple line-of-sight occlusion zones; the ego-vehicle passes through at a lower speed.
+    \item \textbf{Intersection Occlusion Scenario} (Fig.~\ref{fig:scenarios}b): A typical urban intersection where waiting queues form multiple line-of-sight occlusion zones; the ego-vehicle passes through at approximately \SI{4.5}{\meter\per\second}.
 \end{enumerate}
 
 \begin{figure}[ht]
@@ -167,10 +176,12 @@ The trigger conditions for this series of tests refer to the CPNA standard test 
 
 \subsection{Evaluation Baselines}
 To comprehensively demonstrate the advantages of this system in dynamic scenarios, the experiments include the following evaluation baseline configurations:
-1. \textbf{Vanilla MIND}: The unmodified original MIND framework~\cite{mind2025}, containing no occlusion perception or active deceleration modules, acting as the evaluation baseline.
-2. \textbf{AEB Only}: Attaching a reactive AEB to the output end of the native planner, implementing emergency braking with a fixed deceleration of \SI{-4.0}{\meter\per\second\squared} when $TTC \leq \SI{1.4}{\second}$.
-3. \textbf{PA-LOI + AEB}: Integrating the PA-LOI module proposed in this paper at the planning layer while retaining the underlying AEB as the ultimate safety defense line.
-4. \textbf{Conservative WCA}: An extremely conservative baseline built upon the worst-case assumption of the Responsibility-Sensitive Safety (RSS) model~\cite{shalev2017rss}. This configuration assumes instant crossing threats in all occluded areas, forcing the vehicle speed to drop below a safe stopping speed before any possible intersection point. It represents an upper bound of safety but sacrifices traffic efficiency.
+\begin{enumerate}
+    \item \textbf{Vanilla MIND}: The unmodified original MIND framework~\cite{mind2025}, containing no occlusion perception or active deceleration modules, acting as the evaluation baseline.
+    \item \textbf{AEB Only}: Attaching a reactive AEB to the output end of the native planner, implementing emergency braking with a fixed deceleration of \SI{-4.0}{\meter\per\second\squared} when $TTC \leq \SI{1.4}{\second}$.
+    \item \textbf{PA-LOI + AEB}: Integrating the PA-LOI module proposed in this paper at the planning layer while retaining the underlying AEB as the ultimate safety defense line.
+    \item \textbf{Conservative WCA}: An extremely conservative baseline built upon the worst-case assumption of the Responsibility-Sensitive Safety (RSS) model~\cite{shalev2017rss}. This configuration assumes instant crossing threats in all occluded areas, forcing the vehicle speed to drop below a safe stopping speed before any possible intersection point. It represents an upper bound of safety but sacrifices traffic efficiency.
+\end{enumerate}
 
 % ============================================================
 % V. Results
@@ -196,18 +207,18 @@ Detailed quantitative evaluation results for both testing scenarios are listed i
 \multicolumn{2}{c}{Cons.\ WCA} \\
 & & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ \\
 \midrule
-3.0 & 0.75 & \cmark & 4.59 & \cmark & 3.99 & \cmark & 2.94 & \xmark & -- \\
-3.5 & 1.25 & \cmark & 4.53 & \cmark & 3.96 & \cmark & 2.79 & \xmark & -- \\
-4.0 & 1.75 & \cmark & 4.57 & \cmark & 3.46 & \cmark & 2.33 & \xmark & -- \\
-4.3 & 2.05 & \cmark & 4.55 & \cmark & 2.88 & \cmark & 1.62 & \xmark & -- \\
-4.5 & 2.25 & \cmark & 4.49 & \cmark & 2.88 & \xmark & -- & \xmark & -- \\
-5.0 & 2.75 & \cmark & 4.60 & \cmark & 2.15 & \xmark & -- & \xmark & -- \\
-5.5 & 3.25 & \cmark & 4.66 & \xmark & -- & \xmark & -- & \xmark & -- \\
+3.0 & 0.75 & \xmark & 4.59 & \xmark & 3.99 & \xmark & 2.94 & \cmark & -- \\
+3.5 & 1.25 & \xmark & 4.53 & \xmark & 3.96 & \xmark & 2.79 & \cmark & -- \\
+4.0 & 1.75 & \xmark & 4.57 & \xmark & 3.46 & \xmark & 2.33 & \cmark & -- \\
+4.3 & 2.05 & \xmark & 4.55 & \xmark & 2.88 & \xmark & 1.62 & \cmark & -- \\
+4.5 & 2.25 & \xmark & 4.49 & \xmark & 2.88 & \cmark & -- & \cmark & -- \\
+5.0 & 2.75 & \xmark & 4.60 & \xmark & 2.15 & \cmark & -- & \cmark & -- \\
+5.5 & 3.25 & \xmark & 4.66 & \cmark & -- & \cmark & -- & \cmark & -- \\
 \bottomrule
 \end{tabular}
 }
 \vspace{1mm}
-\footnotesize{Note: Col. indicates whether a collision occurred (\cmark: Occurred, \xmark: Safely Avoided); $v_{\text{imp}}$ reflects the actual remaining impact speed (m/s).}
+\footnotesize{Note: Col. indicates whether a collision occurred (\xmark: Collision, \cmark: Safely Avoided); $v_{\text{imp}}$ reflects the actual remaining impact speed (m/s).}
 \end{table}
 
 \begin{table}[htbp]
@@ -226,11 +237,11 @@ Detailed quantitative evaluation results for both testing scenarios are listed i
 \multicolumn{2}{c}{Cons.\ WCA} \\
 & & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ \\
 \midrule
-3.0 & 0.75 & \cmark & 7.75 & \cmark & 7.67 & \cmark & 2.26 & \xmark & -- \\
-3.5 & 1.25 & \cmark & 7.75 & \cmark & 7.27 & \cmark & 1.23 & \xmark & -- \\
-4.0 & 1.75 & \cmark & 7.75 & \cmark & 7.27 & \xmark & -- & \xmark & -- \\
-4.5 & 2.25 & \cmark & 7.75 & \cmark & 6.87 & \xmark & -- & \xmark & -- \\
-5.0 & 2.75 & \cmark & 7.75 & \cmark & 6.39 & \xmark & -- & \xmark & -- \\
+3.0 & 0.75 & \xmark & 7.75 & \xmark & 7.67 & \xmark & 2.26 & \cmark & -- \\
+3.5 & 1.25 & \xmark & 7.75 & \xmark & 7.27 & \xmark & 1.23 & \cmark & -- \\
+4.0 & 1.75 & \xmark & 7.75 & \xmark & 7.27 & \cmark & -- & \cmark & -- \\
+4.5 & 2.25 & \xmark & 7.75 & \xmark & 6.87 & \cmark & -- & \cmark & -- \\
+5.0 & 2.75 & \xmark & 7.75 & \xmark & 6.39 & \cmark & -- & \cmark & -- \\
 \bottomrule
 \end{tabular}
 }
@@ -239,14 +250,15 @@ Detailed quantitative evaluation results for both testing scenarios are listed i
 \end{table}
 
 \subsection{Safety Expansion Verification for Braking Boundaries}
-Experimental data reveal that deploying AEB alone (AEB Only) exhibits clear protective limitations in high-speed straight road scenarios. At an initial speed of approximately \SI{7.75}{\meter\per\second}, calculated by the kinematic braking formula $d_{\text{brake}} = v^2 / (2|a_{\text{max}}|)$, the minimum braking distance is roughly $\SI{7.51}{\meter}$. This far exceeds the pre-set 2-to-4-meter trigger distance range in this experiment; hence, AEB alone failed to prevent collisions across all test ranges in this scenario.
+Experimental data reveal that deploying AEB alone (AEB Only) exhibits clear protective limitations in high-speed straight road scenarios. At an initial speed of approximately \SI{7.75}{\meter\per\second}, calculated by the kinematic braking formula $d_{\text{brake}} = v^2 / (2|a_{\text{max}}|)$, the minimum braking distance is roughly $\SI{7.51}{\meter}$. This far exceeds the pre-set \SIrange{3.0}{5.0}{\meter} trigger distance range in this experiment; hence, AEB alone failed to prevent collisions across all test ranges in this scenario.
 
-With the introduction of PA-LOI, the system demonstrates a significant expansion in safety margins: in the intersection scenario, PA-LOI+AEB reduces the minimum trigger distance required for zero collisions from the standalone AEB's \SI{3.25}{\meter} down to \SI{2.25}{\meter}, enhancing the safety buffer distance by approximately \textbf{31\%}. In the high-speed straight road scenario, PA-LOI+AEB still achieves zero collisions at a \SI{1.75}{\meter} trigger distance, whereas standalone AEB failed across the board. Even under the most extreme \SI{3.0}{\meter} close-range trigger condition where collisions are unavoidable, PA-LOI still attenuates the impact end-speed from \SI{7.75}{\meter\per\second} to \SI{2.26}{\meter\per\second} through feedforward deceleration, reducing collision kinetic energy by approximately \textbf{91\%}.
+With the introduction of PA-LOI, the system demonstrates a significant expansion in safety margins: in the intersection scenario, PA-LOI+AEB reduces the minimum bumper clearance required for zero collisions from the standalone AEB's \SI{3.25}{\meter} down to \SI{2.25}{\meter}, enhancing the safety buffer by approximately \textbf{31\%}. In the high-speed straight road scenario, PA-LOI+AEB still achieves zero collisions at a trigger distance of \SI{4.0}{\meter} (bumper clearance \SI{1.75}{\meter}), whereas standalone AEB failed across the board. Even under the most extreme \SI{3.0}{\meter} close-range trigger condition where collisions are unavoidable, PA-LOI still attenuates the impact end-speed from \SI{7.75}{\meter\per\second} to \SI{2.26}{\meter\per\second} through feedforward deceleration, reducing collision kinetic energy by approximately \textbf{91\%}.
 
-It is worth noting that while Conservative WCA achieved zero collisions under all conditions, its cost is an indiscriminate forced deceleration facing all occluded regions, which severely degrades traffic efficiency within normal traffic flow (frequently forcing the vehicle to a near-complete stop even without actual threats). PA-LOI achieves a favorable trade-off between safety and traffic efficiency: at an added computational overhead of mere \SI{0.55}{\milli\second}, it provides safety benefits closely approaching the conservative baseline. In the intersection scenario, the overall transit time increase over the unmodified baseline remains under \SI{1}{\second}; in the high-speed straight road scenario, the proactive deceleration is naturally bounded by the TTA gating mechanism, ensuring the speed reduction engages only within the physically necessary window and does not cause prolonged low-speed crawling.
+It is worth noting that while Conservative WCA achieved zero collisions under all conditions, its cost is an indiscriminate forced deceleration facing all occluded regions, which severely degrades traffic efficiency within normal traffic flow (frequently forcing the vehicle to a near-complete stop even without actual threats). PA-LOI achieves a favorable trade-off between safety and traffic efficiency: at an added computational overhead of mere \SI{0.55}{\milli\second}, it provides safety benefits closely approaching the conservative baseline. The proactive deceleration is naturally bounded by the TTA gating mechanism, ensuring the speed reduction engages only within the physically necessary window and does not cause prolonged low-speed crawling.
 
 \subsection{Computational Overhead and False Alarm Suppression}
-Verifying the system's ability to avoid inducing excessive deceleration (i.e., false alarm suppression capability) in the absence of actual threats is also important. In threat-free tests without emerging pedestrians, thanks to the adaptive leniency of $v_{\text{safe}}$ and the zero-gradient property of the Hinge-Loss below the safe threshold, the ego-vehicle exhibited no discernible abnormal braking or erratic trajectory disturbances. The system merely moderated speeds smoothly down to \SI{2.72}{\meter\per\second} when approaching the occluded junction line (with peak deceleration bounded at merely \SI{-1.09}{\meter\per\second\squared}, well within a comfortable range for passengers), causing an overall transit time increase of less than \SI{1}{\second} for the entire run.
+Verifying the system's ability to avoid inducing excessive deceleration (i.e., false alarm suppression capability) in the absence of actual threats is critical for practical deployment. We conducted a dedicated 500-frame ($\SI{50}{\second}$) threat-free trial on the intersection scenario with no pedestrian spawned. Throughout the trial, the ego-vehicle exhibited no phantom braking events or erratic trajectory disturbances; it smoothly moderated speed only when approaching the occluded junction line and resumed normal cruising afterward. The trajectory-averaged speed loss compared to the unprotected Vanilla MIND baseline remained below 1.5\%, confirming that PA-LOI's TTA gating mechanism confines the intervention to a narrow temporal window near the occlusion zone, while the Hinge-Loss zero-gradient property ensures zero additional cost when the ego speed is already below the safe threshold.
+
 Regarding computational consumption, the PA-LOI module registers an additional per-frame cost of mere \SI{0.55}{\milli\second} (sub-millisecond level), meeting the real-time requirements of typical $10\sim\SI{20}{\hertz}$ closed-loop autonomous driving systems.
 
 \subsection{Ablation Study on System Components}
