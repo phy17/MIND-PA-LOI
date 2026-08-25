@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate the cloud sweeps (E1 parameter ablation, E2 extended dash protocol).
+"""Aggregate E1/E2 and the prepared E3 reviewer-request extension.
 
 E1: per-variant ghost safety (27 scenes x {5.5, 4.0} m, instant-center) and
     no-ghost efficiency (27 scenes), with the deployed operating point taken
@@ -9,10 +9,15 @@ E1: per-variant ghost safety (27 scenes x {5.5, 4.0} m, instant-center) and
 E2: low-severity / zero-collision / impact metrics per (distance, speed,
     stack) over the 27-scene set, formatted like the published Table IX.
 
+E3: the same metrics for Reachable-set and Dynamic-shadow over the complete
+    finite-speed matrix. E3 is reported only when all 540 prepared tasks exist;
+    it is not part of the current paper's 4,050-run evidence.
+
 Usage (from the MIND repo root, local or on the server):
   python3 experiments/ghost_probe/agg_cloud_sweep.py --sweep sweep_results \
       [--published-ghost-tsv 实验记录/clean81_ghost_task_details_threshold3mps_20260607.tsv] \
-      [--published-noghost-tsv 实验记录/clean81_noghost_efficiency_details_20260607.tsv]
+      [--published-noghost-tsv 实验记录/clean81_noghost_efficiency_details_20260607.tsv] \
+      [--e3-tsv e3_walking_baselines.tsv]
 """
 from __future__ import annotations
 
@@ -74,7 +79,13 @@ def scan_e1(sweep: Path) -> dict[str, dict]:
             if tdir.name.startswith("ghost_"):
                 ghost.append(ghost_metrics(summ))
             elif tdir.name.startswith("noghost_"):
-                noghost.append(summ)
+                noghost.append({
+                    **summ,
+                    "planner_failure": summ.get("planner_failure_frame") is not None,
+                    "ground_truth_collision": (
+                        summ.get("collision_count_ground_truth") or 0
+                    ) > 0,
+                })
         out[vdir.name] = {"ghost": ghost, "noghost": noghost}
     return out
 
@@ -129,13 +140,13 @@ def e1_row(name: str, data: dict) -> str:
             f"no-ghost n={len(n):2d} speed={speed:5.2f} m/s fail={fails} replay={replays}")
 
 
-def scan_e2(sweep: Path) -> dict[tuple, list]:
+def scan_family(sweep: Path, family: str) -> dict[tuple, list]:
     cells = defaultdict(list)
-    e2 = sweep / "e2"
-    if not e2.exists():
+    root = sweep / family
+    if not root.exists():
         return cells
     pat = re.compile(r"s(\d+)_d([0-9p]+)_v([0-9p]+)_(\w+)$")
-    for tdir in sorted(e2.iterdir()):
+    for tdir in sorted(root.iterdir()):
         m = pat.match(tdir.name)
         if not m or not tdir.is_dir():
             continue
@@ -148,6 +159,44 @@ def scan_e2(sweep: Path) -> dict[tuple, list]:
     return cells
 
 
+def cell_rows(cells: dict[tuple, list]) -> list[dict]:
+    rows = []
+    for d, v, baseline in sorted(cells, key=lambda key: (-float(key[0]), float(key[1]), key[2])):
+        values = cells[(d, v, baseline)]
+        hits = [value for value in values if value["ghost_hit"]]
+        rows.append({
+            "distance_m": d,
+            "pedestrian_speed_mps": v,
+            "baseline": baseline,
+            "n": len(values),
+            "spawned": sum(value["spawned"] for value in values),
+            "low_severity": sum(value["low_sev"] for value in values),
+            "zero_collision": sum(value["zero"] for value in values),
+            "ghost_hits": len(hits),
+            "mean_vimp2_hit_only": (
+                sum(value["impact"] ** 2 for value in hits) / len(hits) if hits else 0.0
+            ),
+            "background_collisions": sum(value["bg_hit"] for value in values),
+        })
+    return rows
+
+
+def print_cells(title: str, rows: list[dict]) -> None:
+    print(f"\n=== {title} ===")
+    if not rows:
+        print("(no results yet)")
+        return
+    print(f"{'dist':>5s} {'speed':>6s} {'stack':>10s} {'n':>3s} {'spawn':>5s} "
+          f"{'lowSev%':>8s} {'zero%':>6s} {'hit-v2':>7s} {'bg':>3s}")
+    for row in rows:
+        n = row["n"]
+        print(f"{row['distance_m']:>5s} {row['pedestrian_speed_mps']:>6s} "
+              f"{row['baseline']:>10s} {n:3d} {row['spawned']:5d} "
+              f"{100 * row['low_severity'] / n:8.1f} "
+              f"{100 * row['zero_collision'] / n:6.1f} "
+              f"{row['mean_vimp2_hit_only']:7.2f} {row['background_collisions']:3d}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sweep", type=Path, default=Path("sweep_results"))
@@ -155,6 +204,8 @@ def main() -> None:
                     default=Path("实验记录/clean81_ghost_task_details_threshold3mps_20260607.tsv"))
     ap.add_argument("--published-noghost-tsv", type=Path,
                     default=Path("实验记录/clean81_noghost_efficiency_details_20260607.tsv"))
+    ap.add_argument("--e3-tsv", type=Path,
+                    help="write the complete 540-task E3 aggregate when available")
     args = ap.parse_args()
 
     rec_dir = args.sweep / "records"
@@ -169,20 +220,30 @@ def main() -> None:
         if name in variants:
             print(e1_row(name, variants[name]))
 
-    print("\n=== E2 dash protocol at additional trigger distances (27 scenes) ===")
-    cells = scan_e2(args.sweep)
-    if cells:
-        print(f"{'dist':>5s} {'speed':>6s} {'stack':>9s} {'n':>3s} {'lowSev%':>8s} "
-              f"{'zero%':>6s} {'meanV2':>7s}")
-        for (d, v, b) in sorted(cells):
-            g = cells[(d, v, b)]
-            n = len(g)
-            print(f"{d:>5s} {v:>6s} {b:>9s} {n:3d} "
-                  f"{100 * sum(x['low_sev'] for x in g) / n:8.1f} "
-                  f"{100 * sum(x['zero'] for x in g) / n:6.1f} "
-                  f"{sum(x['impact'] ** 2 for x in g) / n:7.2f}")
-    else:
-        print("(no E2 results yet)")
+    e2_rows = cell_rows(scan_family(args.sweep, "e2"))
+    print_cells("E2 dash protocol at additional trigger distances (27 scenes)", e2_rows)
+    if e2_rows:
+        assert len(e2_rows) == 18 and all(row["n"] == 27 for row in e2_rows), (
+            "incomplete E2 aggregate", len(e2_rows), sorted({row["n"] for row in e2_rows})
+        )
+
+    e3_rows = cell_rows(scan_family(args.sweep, "e3"))
+    print_cells("E3 finite-speed occlusion-aware supervisors (prepared extension)", e3_rows)
+    if e3_rows:
+        assert len(e3_rows) == 20 and all(row["n"] == 27 for row in e3_rows), (
+            "E3 must be complete before reporting", len(e3_rows),
+            sorted({row["n"] for row in e3_rows})
+        )
+        assert sum(row["n"] for row in e3_rows) == 540
+        if args.e3_tsv:
+            args.e3_tsv.parent.mkdir(parents=True, exist_ok=True)
+            with args.e3_tsv.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=list(e3_rows[0]))
+                writer.writeheader()
+                writer.writerows(e3_rows)
+            print(f"wrote {args.e3_tsv}")
+    elif args.e3_tsv:
+        raise RuntimeError("--e3-tsv requested, but no E3 summaries were found")
 
 
 if __name__ == "__main__":
