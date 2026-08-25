@@ -1,0 +1,25 @@
+[
+  {
+    "scene_label": "scene_8195475c",
+    "seq_id": "8195475c-5b29-486e-b4ea-306fa80a25ba",
+    "output_dir": "sweep_results/e1/vfloor1p0/ghost_s75_d5p5/scene_8195475c_8195475c_ours",
+    "video_path": "sweep_results/e1/vfloor1p0/ghost_s75_d5p5/scene_8195475c_8195475c_ours/8195475c-5b29-486e-b4ea-306fa80a25ba_ours_vfloor1p0_d5p5_ic.mov",
+    "overview_png": null,
+    "baseline": "ours",
+    "enable_ghost_probe": true,
+    "enable_aeb": true,
+    "baseline_mode": null,
+    "ghost_spawned": true,
+    "ghost_spawn_mode": "instant_center",
+    "collision_count": 0,
+    "collision_log": [],
+    "first_collision": null,
+    "trigger_distance_m": 5.5,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": 10.619999999999862,
+    "pedestrian_speed_ms": 2.0,
+    "elapsed_s": 716.0
+  }
+]

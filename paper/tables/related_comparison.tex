@@ -1,0 +1,20 @@
+\begin{table*}[!ht]
+\caption{Qualitative Positioning of PA-LOI Among Representative Occlusion-Aware Approaches. The Comparison Concerns Design Choices, Not Head-to-Head Metrics, Because the Cited Methods Are Coupled to Different Planner Stacks and Scenario Definitions.}
+\label{tab:related-comparison}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.20\textwidth}>{\raggedright\arraybackslash}p{0.23\textwidth}>{\raggedright\arraybackslash}p{0.23\textwidth}>{\raggedright\arraybackslash}p{0.13\textwidth}>{\raggedright\arraybackslash}p{0.10\textwidth}}
+\toprule
+Approach & Hidden-risk representation & Planner coupling & Closed-loop evaluation scale & Fixed-geometry protocol \\
+\midrule
+Set-based reachability~\cite{orzechowski2018tackling,koschi2021setbased} & Reachable occupancy behind occluders and beyond sensor range & Verification or constraint layer over a given planner & Formal analysis with case studies & Not released \\
+Dynamic occlusion shadows~\cite{nager2019shadows} & Tracked shadow regions with potential occupants & Reactive constraints on speed and clearance & Closed-loop case studies & Not released \\
+POMDP belief planning~\cite{zhang2021pomdp} & Belief over hidden-agent states & Belief-space planner replaces the nominal stack & Simulation case studies & Not released \\
+Occlusion-aware contingency planning~\cite{zheng2026occlusioncontingency} & Hypothetical agents with contingency branches & Dedicated safety-critical MPC formulation & Simulation scenario studies & Not released \\
+Visibility maximization~\cite{narksri2022visibility} & Visibility deficit along candidate paths & Modified objective of the nominal planner & Intersection case studies & Not released \\
+\midrule
+PA-LOI (this work) & Conflict-centered phantom source with safe-speed bound from bounded-rational emergence & Additive velocity-hinge cost in the trajectory optimizer; learned prediction and scenario-tree logic preserved; AEB fallback & 4050 closed-loop AV2 replay runs: five systems on 81 scenes at six trigger distances, plus no-ghost, walking-speed, extended-distance, and parameter protocols & JSONL-fixed geometry; archive supplied (records, code, scripts) \\
+\bottomrule
+\end{tabular}
+\end{table*}

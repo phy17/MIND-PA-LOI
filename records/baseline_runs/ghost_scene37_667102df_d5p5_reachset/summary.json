@@ -1,0 +1,65 @@
+[
+  {
+    "scene_label": "scene_667102df",
+    "seq_id": "667102df-3606-4451-b2af-41fa3759f878",
+    "output_dir": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene37_667102df_d5p5_reachset/scene_667102df_667102df_reachset",
+    "video_path": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene37_667102df_d5p5_reachset/scene_667102df_667102df_reachset/667102df-3606-4451-b2af-41fa3759f878_reachset_d5p5_instant_center.mov",
+    "overview_png": null,
+    "baseline": "reachset",
+    "enable_ghost_probe": false,
+    "enable_aeb": true,
+    "baseline_mode": "reachset",
+    "ghost_spawned": false,
+    "ghost_spawn_mode": "instant_center",
+    "collision_count": 1,
+    "collision_log": [
+      {
+        "timestamp": 7.699999999999924,
+        "frame_idx": 385,
+        "ego_state": [
+          6268.91610758222,
+          819.0374665788071,
+          0.02999632378048836,
+          1.604904760257577
+        ],
+        "ego_vel": 0.02999632378048836,
+        "other_id": "91015",
+        "other_type": "ObjectType.VEHICLE",
+        "other_state": [
+          6268.62890625,
+          814.5419921875,
+          7.994166374206543,
+          1.6344895362854004
+        ],
+        "collision_msg": "Collision with vehicle ID:91015"
+      }
+    ],
+    "first_collision": {
+      "timestamp": 7.699999999999924,
+      "frame_idx": 385,
+      "ego_state": [
+        6268.91610758222,
+        819.0374665788071,
+        0.02999632378048836,
+        1.604904760257577
+      ],
+      "ego_vel": 0.02999632378048836,
+      "other_id": "91015",
+      "other_type": "ObjectType.VEHICLE",
+      "other_state": [
+        6268.62890625,
+        814.5419921875,
+        7.994166374206543,
+        1.6344895362854004
+      ],
+      "collision_msg": "Collision with vehicle ID:91015"
+    },
+    "trigger_distance_m": 5.5,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": null,
+    "pedestrian_speed_ms": 2.0,
+    "elapsed_s": 1239.1
+  }
+]

@@ -1,0 +1,25 @@
+[
+  {
+    "scene_label": "scene_c4b2ade0",
+    "seq_id": "c4b2ade0-eeba-4630-9bd2-322747780ee2",
+    "output_dir": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene17_c4b2ade0_d4_shadow/scene_c4b2ade0_c4b2ade0_shadow",
+    "video_path": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene17_c4b2ade0_d4_shadow/scene_c4b2ade0_c4b2ade0_shadow/c4b2ade0-eeba-4630-9bd2-322747780ee2_shadow_d4_instant_center.mov",
+    "overview_png": null,
+    "baseline": "shadow",
+    "enable_ghost_probe": false,
+    "enable_aeb": true,
+    "baseline_mode": "shadow",
+    "ghost_spawned": false,
+    "ghost_spawn_mode": "instant_center",
+    "collision_count": 0,
+    "collision_log": [],
+    "first_collision": null,
+    "trigger_distance_m": 4.0,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": null,
+    "pedestrian_speed_ms": 2.0,
+    "elapsed_s": 439.3
+  }
+]

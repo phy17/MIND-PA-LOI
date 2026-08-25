@@ -1,0 +1,23 @@
+\begin{table*}[!ht]
+\caption{Risk-Layer Parameter Perturbation on the 27-Scene Set (Ghost at 5.5 and 4.0\,m, Instant-Center, 650 Frames, Plus No-Ghost Efficiency). The Deployed Row Uses the Published Strict-650 Tables on the Identical Cells.}
+\label{tab:param-ablation}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lccccccc}
+\toprule
+Setting & Spawn & \makecell{Low-severity\\(all 54 cells)} & \makecell{Low-severity\\(spawned)} & \makecell{Zero collision\\(all 54 cells)} & \makecell{Mean $v_{\mathrm{imp}}^2$\\(spawned)} & \makecell{No-ghost\\speed (m/s)} & \makecell{PF/RC} \\
+\midrule
+Deployed ($0.6/2.0/25$) & 54/54 & 92.6\% & 92.6\% & 48.1\% & 2.87 & 3.47 & 0/0 \\
+\midrule
+$\eta=0.4$ & 50/54 & 87.0\% & 90.0\% & 44.4\% & 2.55 & 3.29 & 0/3 \\
+$\eta=0.8$ & 54/54 & 87.0\% & 87.0\% & 38.9\% & 3.24 & 3.57 & 0/4 \\
+$v_{\mathrm{floor}}=1.0$ & 51/54 & 88.9\% & 90.2\% & 46.3\% & 2.72 & 3.34 & 0/3 \\
+$v_{\mathrm{floor}}=3.0$ & 51/54 & 94.4\% & 94.1\% & 50.0\% & 2.86 & 3.55 & 0/1 \\
+$w_{\max}=15$ & 54/54 & 81.5\% & 81.5\% & 37.0\% & 3.34 & 3.54 & 1/4 \\
+$w_{\max}=35$ & 51/54 & 88.9\% & 90.2\% & 44.4\% & 2.44 & 3.31 & 0/3 \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}{\scriptsize Unspawned cells (ego never reaches the trigger within 650 frames) count as safe in all-cell columns; the spawned-only column removes this credit. PF/RC: planner failures / replay collisions over 27 no-ghost runs; the $w_{\max}=15$ speed includes one run truncated at frame 630 (3.46\,m/s excluding it).}
+\end{table*}

@@ -1,0 +1,30 @@
+{
+  "sim_name": "aeb_only_d5p5_instant_center",
+  "seq_id": "d567a51c-0e57-4e40-885a-36f5f8f99dd1",
+  "output_dir": "output/mechanism_case/aeb_only/scene_d567a51c_d567a51c_aeb_only/",
+  "num_threads": 4,
+  "render": false,
+  "render_config": {
+    "mode": "follow",
+    "camera_position": {
+      "x": 0,
+      "y": 0,
+      "yaw": 0,
+      "elev": 90
+    },
+    "figsize": 10.0,
+    "dpi": 120,
+    "font_size": 8
+  },
+  "cl_agents": [
+    {
+      "id": "AV",
+      "enable_timestep": 4.0,
+      "semantic_lane": -1,
+      "target_velocity": 8,
+      "agent": "agent:MINDAgent",
+      "planner_config": "planners/mind/configs/demo_2.json"
+    }
+  ],
+  "use_cuda": false
+}

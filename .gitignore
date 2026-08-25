@@ -1,44 +1,6 @@
-# Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv_mind_cpu/
-venv/
-.env
-
-# Project Specific
-data/
-output/
-outputs/
-logs/
-*.log
 .DS_Store
-.idea/
-.vscode/
-
-# Temporary files
-temp/
-tmp/
-*.tmp
-mind_demo_videos.zip
-mind_demo_videos/
+restored_workspace/
+output/
+*.log

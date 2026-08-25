@@ -1,0 +1,21 @@
+\begin{table}[H]
+\caption{Itemized Difference Between the ITSC Conference Paper and This Journal Article. The Risk-Layer Algorithm Is Explicitly Carried Over; the Journal Contribution Is the New Scientific Question, Evaluation Instrument, Comparative Evidence, and Reproducibility Record.}
+\label{tab:conference-delta}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.15\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.41\textwidth}}
+\toprule
+Aspect & ITSC conference paper & Present journal article \\
+\midrule
+Scientific question & Demonstrates whether proactive occlusion-risk shaping can improve on late AEB in representative scenes. & Tests whether the unchanged layer reduces severity with less conservatism than strict occlusion bounds on identical hazards, and quantifies the no-pedestrian cost. \\
+Risk layer & Introduces TTA gating, the crossing-time safe-speed construction, velocity-hinge cost, and AEB fallback. & Preserves those components; adds an implementation-faithful formalization, complete deployed parameters and fallback semantics, and the bounded-rational policy-class interpretation. \\
+Evaluation scale & Two representative AV2-derived occlusion sites with trigger-distance sweeps and an illustrative threat-free trial. & clean81 with 81 fixed scenes, six trigger distances, five stacks, and 4050 closed-loop runs across the main, no-ghost, walking, extended-distance, and parameter protocols. \\
+Comparators & MIND, AEB-only, PA-LOI, and a generic conservative worst-case assumption. & MIND, AEB-only, PA-LOI, and traceable per-step ports of set-based reachability and dynamic-shadow families under shared geometry, physics, and AEB shielding. \\
+Reporting and inference & Collision/impact summaries, one threat-free example, component examples, and module latency. & Low-severity and zero collision separated; background collision, planner infeasibility, impact speed, velocity-squared proxy, spawn-rate conservatism, scene-clustered intervals, paired effect sizes, and exact sign tests. \\
+Robustness and audit & Representative component ablations and qualitative limitations. & Held-out new60 split, thresholds from 2.0--3.5\,m/s, moving pedestrians over three triggers, six parameter perturbations, both horizon accountings, and an unfiltered 88-candidate curation audit. \\
+Reproducibility & Scenario-level implementation demonstration. & Canonical JSONL geometry, archived per-run records, method and supervisor code, deterministic table scripts, checksums, and a tested workspace-restoration map. \\
+\bottomrule
+\end{tabular}
+\end{table}

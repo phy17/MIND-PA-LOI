@@ -1,359 +1,435 @@
-\documentclass[conference]{IEEEtran}
+\documentclass[journal]{IEEEtran}
 
-% ============================================================
-% Packages
-% ============================================================
-\usepackage{cite}
-\usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithm}
-\usepackage{algorithmic}
-\usepackage{graphicx}
-\usepackage{textcomp}
-\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
 \usepackage{booktabs}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage{makecell}
 \usepackage{multirow}
 \usepackage{siunitx}
-\usepackage{hyperref}
-\usepackage{pifont}
-\usepackage[caption=false,font=footnotesize]{subfig}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{newtxtext,newtxmath}
+\usepackage[hidelinks]{hyperref}
 
-% Checkmark and crossmark
-\newcommand{\cmark}{\ding{51}}
-\newcommand{\xmark}{\ding{55}}
+\hypersetup{
+  pdftitle={PA-LOI: A Proactive Risk Layer for Occluded Pedestrian Emergence},
+  pdfauthor={Hongyu Peng; Shangqi Zhang; Bo Chen; Xiao Wang},
+  pdfkeywords={autonomous driving; pedestrian flows and crowds; modelling and simulation; methods for safety; occlusion-aware planning; bounded rationality}
+}
 
-% ============================================================
-% Title
-% ============================================================
-\title{PA-LOI: Proactive Anticipation via Latent Occlusion Inference for Safe Autonomous Driving in Ghost Probe Scenarios}
+\sisetup{detect-all=true}
 
-% For double-blind review or camera-ready submission:
-% \author{
-% \IEEEauthorblockN{Author One\IEEEauthorrefmark{1}, Author Two\IEEEauthorrefmark{1}}
-% \IEEEauthorblockA{\IEEEauthorrefmark{1}Department of XXX, University of XXX\\
-% Email: \{author1, author2\}@xxx.edu}
-% }
+% Pack floats tightly: allow stacked double-column tables and fuller float pages.
+\setcounter{dbltopnumber}{3}
+\renewcommand{\dbltopfraction}{0.92}
+\renewcommand{\dblfloatpagefraction}{0.85}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.85}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+\setlength{\dblfloatsep}{6pt plus 2pt minus 2pt}
+\setlength{\intextsep}{6pt plus 2pt minus 2pt}
+
+\title{PA-LOI: A Proactive Risk Layer for Occluded Pedestrian Emergence}
+
+\author{Hongyu~Peng, Shangqi~Zhang, Bo~Chen, and Xiao~Wang%
+\thanks{This work was supported by the National Natural Science Foundation of China under Grant 62522601 and the Anhui Provincial Outstanding Young Scholars Research Program for Universities under Grant 2023AH020005. \emph{(Corresponding author: Xiao Wang.)}}%
+\thanks{Hongyu Peng is with the School of Electrical Engineering and Automation, Anhui University, Hefei 230601, China. Shangqi Zhang is with the School of Computer Science and Technology, Anhui University, Hefei 230601, China. Bo Chen is with Anhui Jianghuai Automobile Group Corp., Ltd., Hefei, China. Xiao Wang is with the Institute of Embodied Intelligence, Anhui University, Hefei 230601, China (e-mail: xiao.wang@ahu.edu.cn).}%
+\thanks{This manuscript substantially extends the accepted ITSC conference paper ``PA-LOI: Velocity-Aware Risk Field for Proactive Occluded Pedestrian Collision Avoidance''~\cite{paloi_itsc2026}.}}
 
 \begin{document}
+
 \maketitle
 
-% ============================================================
-% Abstract
-% ============================================================
 \begin{abstract}
-Ghost probe scenarios---where a pedestrian suddenly emerges from behind an occluding vehicle---pose one of the most critical safety challenges for autonomous driving systems.
-Conventional reactive Automatic Emergency Braking (AEB) systems detect the pedestrian only after it becomes visible, leaving insufficient braking distance at typical urban speeds.
-In this paper, we propose \textbf{PA-LOI} (Proactive Anticipation via Latent Occlusion Inference), a modular risk-aware planning layer that proactively reduces vehicle speed near occluded areas \emph{before} any pedestrian is detected.
-By constructing a dynamic risk field around potential occlusion zones, PA-LOI enables the ego vehicle to arrive at the hazard point with substantially lower velocity, thereby extending the effective braking window of downstream AEB systems. The framework is designed as a plug-in safety module and is validated by integrating it into a state-of-the-art interaction-aware planning framework that originally lacks explicit handling for unobservable geometric regions.
-We evaluate PA-LOI on two distinct ghost probe scenarios from the Argoverse~2 Motion Forecasting dataset---a complex intersection and a straight road with dense parked vehicles---comparing four system configurations across multiple trigger distances.
-In the intersection scenario, PA-LOI+AEB achieves zero collision from a front-bumper clearance of \SI{2.05}{\meter}, versus \SI{3.25}{\meter} for AEB alone (a \textbf{37\%} reduction). In the more challenging high-speed straight road scenario, AEB alone fails at all tested distances, while PA-LOI+AEB achieves zero collision from just \SI{1.75}{\meter} and reduces worst-case impact velocity by \textbf{71\%} (from \SI{7.75}{\meter\per\second} to \SI{2.26}{\meter\per\second}).
+Occluded pedestrian emergence is a safety-critical corner case: reactive braking acts late, while worst-case occlusion bounds can overconstrain mobility. We ask whether a proactive risk layer can reduce contact severity without persistent crawling. Proactive Anticipation via Latent Occlusion Inference represents hidden pedestrians through a bounded-rational policy class and converts occlusion geometry into a phantom risk source, safe-speed boundary, and velocity-aware hinge cost for an integrated prediction--decision planner with emergency braking. We introduce clean81, a reproducible Argoverse 2 closed-loop benchmark with fixed hazard geometry. Across 4050 runs over 81 scenes, six trigger distances, and five driving stacks, the proposed layer increases the low-severity outcome rate from 15.6\% for emergency braking alone and 3.7\% for the unmodified host planner to 63.4\%. It reduces the all-task velocity-squared impact proxy from 30.99 and 41.33 to 7.81. On matched triggers, the proposed layer attains a higher low-severity rate than two re-implemented occlusion-aware bounds (58.5\% versus 34.4--34.9\%) while triggering more often (87.7\% versus 43.0\% spawn rate). In no-pedestrian runs, it incurs a 27.0\% mean-speed loss but avoids the planner failures and replay collisions observed for the comparison stacks. Performance ordering remains stable under walking-speed emergence, trigger distances down to \SI{3.5}{m}, and six one-parameter perturbations. These results establish an auditable safety--efficiency tradeoff for proactive occlusion-risk handling in closed-loop urban driving.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Automatic Emergency Braking, Autonomous Driving, Ghost Probe, Occlusion-Aware Planning, Pedestrian Safety, Risk Field
+Autonomous driving, pedestrian flows and crowds, modelling and simulation, methods for safety, occlusion-aware planning, bounded rationality.
 \end{IEEEkeywords}
 
-% ============================================================
-% I. Introduction
-% ============================================================
 \section{Introduction}
 
-Pedestrian fatalities remain a leading concern in urban traffic safety. Among the most dangerous scenarios is the so-called \emph{ghost probe}~\cite{euroncap2023}, where a pedestrian suddenly steps out from behind an occluding object (e.g., a parked vehicle or a bus) directly into the path of an approaching vehicle. The pedestrian is invisible to the driver and onboard sensors until the moment of emergence, leaving minimal time for collision avoidance.
+Autonomous driving systems are commonly evaluated on visible-agent prediction, lane-level interaction, and reactive safety constraints. In urban traffic, however, a vulnerable road user can emerge from behind a parked or slow vehicle, enter the ego path within a short time-to-collision window, and invalidate the assumption that the current visible scene is a sufficient state for planning. This ``ghost-probe'' pattern is not merely a perception failure but a coupled traffic decision problem in which pedestrian, ego vehicle, and surrounding traffic all operate under limited information and bounded reaction capability. The risk is created before the pedestrian is observed: it lies in the hidden feasible space behind an occluder and in the ego vehicle's decision to preserve speed as if that space were empty.
 
-Modern Automatic Emergency Braking (AEB) systems have demonstrated significant effectiveness in reducing pedestrian fatalities~\cite{cicchino2022effects}. However, AEB is inherently \emph{reactive}: it can only engage after the pedestrian is detected. In ghost probe scenarios, the detection-to-collision window is often shorter than the physical braking distance required, rendering AEB insufficient.
+This observation connects occluded pedestrian safety with bounded rationality~\cite{simon1955behavioral} and cyber--physical--social transportation systems~\cite{wang2010parallel,wang2017parallel,wang2024parallel}: a human pedestrian may make a locally satisfying crossing decision from incomplete information rather than a globally optimal one. An autonomous vehicle that assumes fully rational and fully observed participants can consequently suffer a prediction--decision chain fracture: prediction contains no pedestrian; decision keeps a high-speed trajectory; AEB reacts only after the conflict becomes imminent (Fig.~\ref{fig:concept}).
 
-We identify the root cause of AEB failure in these scenarios: \textbf{the ego vehicle arrives at the occlusion zone with excessive speed}. If the vehicle were traveling slower when the pedestrian emerges, the same AEB system would have sufficient braking distance to avoid collision entirely.
+Automatic emergency braking (AEB) reduces real-world pedestrian crash risk and is standardized in vulnerable road user testing protocols~\cite{euroncap2024,cicchino2022effects}. Yet AEB is intrinsically late because it is triggered by detected collision imminence. Formal safety-envelope approaches such as RSS~\cite{shalev2017rss} provide useful longitudinal and lateral constraints, but they also require a concrete set of agents and assumptions about their reachable states. Occlusion-aware planning expands this set by reasoning about invisible participants~\cite{orzechowski2018tackling,koschi2021setbased,nager2019shadows,schratter2019occlusion,chen2023quantified,park2023reachability}. The remaining challenge is to connect such hidden-risk reasoning to an integrated prediction--decision planner without turning the vehicle into an unnecessarily slow, overly conservative system.
 
-Based on this insight, we propose \textbf{PA-LOI} (Proactive Anticipation via Latent Occlusion Inference), a framework that:
-\begin{enumerate}
-    \item Identifies potential occlusion zones created by static obstacles (parked vehicles, buildings) along the planned path;
-    \item Constructs a \emph{phantom risk field} that models the potential for unseen pedestrians emerging from these zones;
-    \item Integrates this risk field into the cost function of an Iterative Linear Quadratic Regulator (iLQR)-based trajectory optimizer, inducing proactive speed reduction as the vehicle approaches the occlusion.
-\end{enumerate}
+Our conference paper introduced PA-LOI (Proactive Anticipation via Latent Occlusion Inference), a proactive risk field that uses occlusion geometry and ego speed to slow the integrated prediction--decision planner MIND~\cite{mind2025} before an occluded pedestrian appears~\cite{paloi_itsc2026}. That paper demonstrated the idea on a small number of scenarios and left the central scientific question open: on identical hazards, can a proactive layer achieve lower-severity outcomes with less conservatism than worst-case occlusion bounds---and at what efficiency cost when no pedestrian ever appears? Answering this requires infrastructure the conference version did not have: fixed hazard geometry that every planner faces identically, baselines from the occlusion-aware literature running on the same platform, and metrics that cannot mistake conservatism for safety. This journal version keeps the safety layer unchanged---the hinge velocity cost, the time-to-arrival gating, the crossing-time safe-speed bound, and the latched AEB fallback all originate in the conference version---and contributes that missing evidence:
+\begin{itemize}
+  \item \emph{A reproducible benchmark with a five-system head-to-head comparison.} We build clean81, a JSONL-fixed Argoverse 2 (AV2) closed-loop benchmark, and report 4050 closed-loop runs: 1458 ghost-probe trials over 81 scenes, six trigger distances, and three primary stacks; 972 trials of two re-implemented occlusion-aware supervisors (set-based reachability and dynamic shadow) on identical hazards; a 324-run no-ghost efficiency protocol; a 324-task pedestrian-speed protocol; and a 972-task sensitivity sweep spanning six risk-layer parameter perturbations and two additional walking-pedestrian trigger distances. A per-system \emph{spawn rate} is reported as a first-class conservatism indicator, so that slowing until the hazard never materializes cannot be scored as safety. An unfiltered 88-candidate audit tests dependence on scene curation. Geometry, per-run records, method code, and analysis scripts accompany the submission.
+  \item \emph{Implementation-faithful formalization.} We formalize the phantom risk source, the time-to-arrival activation, the safe-speed boundary, and the velocity-aware hinge cost, and report the deployed crossing-time instantiation with a complete parameter table, so the method section and the evaluated system describe the same object.
+  \item \emph{Bounded-rational problem framing with operational content.} A minimal hidden-pedestrian policy class with explicit information, satisficing, and capability bounds clarifies why occlusion fractures the prediction--decision chain; each bound maps to a concrete element of the risk layer. Finite-speed trials realize this class, while instant-center injection is disclosed as a deliberately harsher outer stress envelope.
+  \item \emph{Sensitivity analysis.} The pedestrian-speed protocol separates the outer instant-center stress test from realistic walking-speed emergence, formalizing a robustness range the conference version reported only informally, and threshold, split, trigger-distance, and parameter analyses show the ranking is stable across reporting thresholds, held-out scenes, triggers down to \SI{3.5}{m}, and perturbations of every risk-layer parameter.
+\end{itemize}
 
-The key contribution is not a replacement for AEB, but a \emph{complementary upstream module} that extends AEB's effective operating envelope by managing the vehicle's speed profile prior to the point of potential hazard.
+Across 1458 clean81 ghost-probe tasks, PA-LOI reaches a 63.4\% low-severity rate, versus 15.6\% for AEB-only and 3.7\% for MIND, and reduces the velocity-squared impact proxy to 7.81 from 30.99 and 41.33. On the 195 triggers shared by all five stacks, it reaches 58.5\% low severity versus 34.4--34.9\% for the two occlusion-aware bounds, while its 87.7\% spawn rate is roughly twice their 43.0\%. This gain costs 27.0\% mean speed in no-ghost driving. The ordering persists under finite-speed emergence down to \SI{3.5}{m} triggers, threshold and split checks, and six parameter perturbations.
 
-% ============================================================
-% II. Related Work
-% ============================================================
+\subsection{Relation to the Conference Version}
+
+The ITSC paper introduced PA-LOI and demonstrated feasibility on a small scenario set~\cite{paloi_itsc2026}; the risk-layer algorithm is unchanged here. The journal-scale behavioral evidence is new: clean81 and its candidate audit, five-system exposure-aware comparison, no-ghost and walking protocols, statistical analysis, and severity-graded reporting. Only the unchanged layer's latency is carried over (Section~IV-I). The journal article also documents the deployed activation, relaxed bound, fallback, and parameters, and formalizes hidden emergence as a bounded-rational policy class. Supplementary Table~S5 itemizes the extension.
+
+Reproducibility is treated as part of the contribution: two runs sharing a scene name can evaluate different hazards if the hidden start point, conflict point, and trigger timing are not fixed. The JSONL geometry file is therefore the canonical experimental contract, reused for rendering, injection, and analysis, and every table and figure is regenerated from archived result files (see the Data and Code Availability statement).
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.70\textwidth]{figures/concept_bounded_rationality.pdf}
+  \caption{Bounded-rational interpretation of occluded pedestrian emergence. (a)~A parked occluder hides the pedestrian; the visible-agent prediction set is empty at the conflict point, so the plan keeps speed and only a late reactive brake remains (chain fracture). (b)~PA-LOI converts the hidden-emergence hypothesis into a phantom risk source and a safe-speed bound, shaping the approach speed before the occlusion breaks.}
+  \label{fig:concept}
+\end{figure*}
+
 \section{Related Work}
 
-\subsection{Automatic Emergency Braking for Pedestrians}
-AEB systems for pedestrian protection have been extensively studied and standardized through the European New Car Assessment Programme (Euro NCAP) Car-to-Pedestrian test protocols, including the CPNA (Nearside Adult) and CPNC (Nearside Child) scenarios~\cite{euroncap2023}. These protocols evaluate AEB performance when a pedestrian crosses the vehicle's path, potentially from behind an occluding object. While AEB significantly reduces impact velocity, prior work has shown that occlusion can degrade AEB effectiveness due to reduced detection time~\cite{cicchino2022effects}.
+\subsection{AEB and Vulnerable Road User Safety}
 
-\subsection{Occlusion-Aware Motion Planning}
-Several approaches address the challenge of planning under occlusion. The Responsibility-Sensitive Safety (RSS) framework~\cite{shalev2017rss} provides formal safety guarantees by defining worst-case assumptions about hidden road users. Partially Observable Markov Decision Process (POMDP)-based behavior planners~\cite{zhang2021pomdp} model occlusion as partial observability and optimize policies that balance safety with efficiency. Other approaches introduce virtual traffic participants (phantom agents) in occluded areas to inform planning decisions~\cite{schratter2019occlusion}.
+Pedestrian detection, trajectory forecasting, and multimodal perception are central upstream components for autonomous driving pedestrian safety~\cite{rasouli2020survey}. Pedestrian AEB has become central to vehicle safety assessment: Euro NCAP protocols define vulnerable road user testing conditions and speed ranges~\cite{euroncap2024}, crash-data studies show that AEB reduces pedestrian crash risk in real traffic~\cite{cicchino2022effects}, and risk-based emergency steering shows how uncertainty-aware maneuvers can complement braking~\cite{tolksdorf2026steering}. These results motivate AEB as a baseline and last-resort fallback. But AEB intervenes only after a collision threat is observable, and in a ghost-probe event the decisive safety margin may be consumed before the pedestrian is visible. Our study therefore treats AEB as necessary but insufficient, and asks whether upstream planning can create enough time and distance for braking to be effective.
 
-While these State-of-the-Art (SOTA) methods are highly effective, they often incur significant computational overhead or require complex probabilistic tracking of hypothesized entities. In contrast, PA-LOI differs by directly embedding a geometric occlusion risk footprint into the trajectory optimization cost function. This continuous spatial representation eliminates the need for discrete agent instantiation or expensive probabilistic sampling, resulting in a highly computationally efficient architecture that is straightforward to deploy alongside existing industrial planners.
+\subsection{Occlusion-Aware Planning and Phantom Risk}
 
-\subsection{Risk Field Methods}
-Potential field and risk field approaches have a long history in motion planning~\cite{khatib1986potential}. Recent work has applied risk fields to autonomous driving for obstacle avoidance and lane keeping. PA-LOI extends this paradigm by constructing risk fields specifically for \emph{unobserved} regions, using geometric occlusion analysis to weight the risk contribution of each hidden area.
+Occlusion-aware methods reason about traffic participants that are not directly visible. Four families dominate. Constraint- and verification-style methods bound what a hidden agent could do: early blind-corner planners change the approach behavior before a hidden road user is detected~\cite{hoermann2017blindcorners}, set-based verification expands reachable sets behind occlusions and limited sensor range~\cite{orzechowski2018tackling,koschi2021setbased}, and dynamic shadow regions track hidden spaces and their possible occupants at controlled computational cost~\cite{nager2019shadows,occtrack2025}. Risk-estimation methods quantify emergence probability and collision risk around occluders~\cite{schratter2019occlusion,koc2021pedestrian,chen2023quantified,park2023reachability,blindspot2024,trauth2023toward}. Belief-space and contingency methods plan against hypothetical hidden agents explicitly~\cite{zhang2021pomdp,chen2025deadlock,zheng2026occlusioncontingency}, while visibility-maximization and active-perception work treats occlusion as an information-gathering problem~\cite{narksri2022visibility,zhang2021active}. Occlusion-aware planning is also an active thread in the ITS journals themselves: risk-field-based model-predictive planning handles unknown occluded agents~\cite{vanderploeg2024riskfields}, stochastic MPC addresses pedestrians occluded by leading vehicles~\cite{li2024smpc}, POMDP planning with V2X support generates phantom road users inside occluded areas~\cite{zhang2024v2xocclusion}, and dedicated inference-and-planning stacks target occluded intersections~\cite{zhao2024occludedintersections}.
 
-% ============================================================
-% III. System Architecture
-% ============================================================
-\section{System Architecture}
+PA-LOI is closest to this literature in motivation but different in its integration target. It does not replace the integrated planner with a new full-stack occlusion planner. Instead, it compresses a socially meaningful hidden space into a conflict-centered phantom source, a safe-speed boundary, and a velocity-aware cost term inserted into MIND's trajectory optimizer. This design preserves MIND's learned predictor and scenario-tree generator while repairing the specific failure mode created by an absent road user. The nearest technical neighbors make the contrast concrete: the occlusion risk field of van der Ploeg et al.~\cite{vanderploeg2024riskfields} and the phantom-vehicle velocity bounds of Zheng et al.~\cite{zheng2026occlusioncontingency} both live inside bespoke MPC formulations, and the phantom road users of Zhang et al.~\cite{zhang2024v2xocclusion} require a belief-space planner with V2X support, whereas PA-LOI adds hidden-risk reasoning without replacing MIND's learned prediction or scenario-tree logic. Cooperative perception can remove some occlusions physically~\cite{zhang2024v2xocclusion}; PA-LOI addresses the complementary, infrastructure-free case.
 
-\subsection{Overview}
-The PA-LOI system operates as a proactive safety layer upstream of a conventional AEB module. The architecture consists of three components (Fig.~\ref{fig:architecture}):
+Supplementary Table~S1 positions PA-LOI among representative occlusion-aware designs by hidden-risk representation, planner coupling, evaluation scale, and released geometry. We quantitatively evaluate the two families that port to our platform without replacing the host planner: set-based reachability~\cite{orzechowski2018tackling,koschi2021setbased} and dynamic shadows~\cite{nager2019shadows}. Belief-space, contingency-MPC, and visibility-maximization methods require deeper stack changes and are therefore positioned qualitatively. The stopping-feasibility bound used by the reachability family shares the physics of PA-LOI's strict safe-speed boundary (Section~III-D). Thus, the head-to-head isolates how a hidden-pedestrian hypothesis is mapped into a constraint and whether that constraint is relaxed, under shared physical parameters, AEB shielding, and JSONL-fixed geometry.
 
-\begin{enumerate}
-    \item \textbf{Occlusion Geometry Analyzer}: Identifies occluding objects and computes shadow regions along the ego vehicle's planned path.
-    \item \textbf{Dynamic Risk Field Generator}: Constructs a phantom risk corridor around identified occlusion zones, with risk intensity proportional to occlusion severity and proximity.
-    \item \textbf{Risk-Integrated Trajectory Optimizer}: We extend the MIND planner~\cite{mind2025}, a state-of-the-art multi-modal interaction-aware planning framework based on iLQR optimization. While MIND excels at predicting and responding to observable traffic participants, it inherently lacks awareness of unobservable regions. PA-LOI fills this gap by incorporating the risk field as an additional cost term, producing trajectories that proactively reduce speed near occlusions.
-\end{enumerate}
+\subsection{Safety Envelopes and Integrated Prediction-Decision Planning}
 
-The downstream AEB module operates independently, applying emergency braking when a collision threat is detected via Time-To-Collision (TTC) analysis.
+RSS defines a formal safety model for scalable self-driving cars~\cite{shalev2017rss}; scenario MPC reasons about multiple futures under constraints~\cite{cesari2017mpc}; contingency planning preserves feasible fallback behavior under uncertain obstacle evolution~\cite{hardy2013contingency,li2023marc}; POMDP planners maintain belief over hidden participants~\cite{zhang2021pomdp}; and learning-based planners can condition behavior on perceptual uncertainty~\cite{packer2023anyone}. Recent trajectory-planning studies likewise integrate uncertainty, contingency, and cognitive risk directly into optimization, reinforcing the idea that risk should enter planning rather than remain a post hoc filter~\cite{guo2025uncertainty,lin2025contingency,zhao2026cognitive}. MIND integrates multimodal prediction and decision-making through interaction modality exploration~\cite{mind2025}, giving it richer closed-loop behavior than a purely reactive controller---yet any integrated planner remains vulnerable when the candidate future tree is generated from an incomplete visible-agent set. PA-LOI targets exactly this narrower, measurable fracture: the pedestrian is not merely uncertain in state or intention but structurally absent from the planner's visible-agent set until the occlusion breaks, and PA-LOI injects a structured hidden-risk source before the pedestrian materializes.
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\columnwidth]{figures/architecture.pdf}
-\caption{PA-LOI system architecture.}
-\label{fig:architecture}
+\subsection{Bounded Rationality and CPSS Interpretation}
+
+Bounded rationality explains decision making under incomplete information and finite cognitive resources~\cite{simon1955behavioral}: a pedestrian may cross from behind an occluder using local cues and limited line-of-sight rather than a complete prediction of every vehicle. Interaction surveys and recent bounded-rational models support the view that pedestrian behavior should not be reduced to perfect-rational trajectory optimization~\cite{rasouli2020survey,dang2025bounded}; CPSS and parallel-driving research emphasizes that intelligent vehicles operate in a coupled physical, computational, and social space~\cite{wang2010parallel,wang2017parallel,wang2024parallel}; and driver digital twins motivate modeling heterogeneous behaviors and limited decision capacities~\cite{hu2022driver}. Our formulation uses these ideas at the scene level: a hidden pedestrian is not an adversarial oracle but a bounded-rational participant whose possible emergence should be reflected in risk-aware planning.
+
+\subsection{Benchmarks and Reproducible Closed-Loop Evaluation}
+
+Autonomous-driving evaluation has increasingly moved from isolated hand-crafted tests to reusable datasets, simulators, and scenario benchmarks: CommonRoad formalizes composable motion-planning benchmarks~\cite{althoff2017commonroad}, CARLA provides an open urban-driving simulator~\cite{dosovitskiy2017carla}, AV2 supplies large-scale real-world map and agent context~\cite{argoverse2}, and nuPlan emphasizes learning-based planning in realistic closed-loop settings~\cite{karnchanachari2024nuplan}. Closer to our setting, the DOS benchmark supplies reusable occlusion scenarios for end-to-end driving in CARLA~\cite{shao2023reasonnet}; clean81 differs in replaying real AV2 maps and logged traffic with JSONL-fixed hazard geometry and severity-graded metrics, following the criticality-metric view that safety evaluation should report multiple severity and exposure measures rather than a single binary collision label~\cite{westhofen2023criticality}. The goal is not only to show that one selected scene can be solved, but to make occluded-pedestrian emergence reproducible across many AV2 scenes, trigger distances, and planner variants.
+
+\section{Method}
+
+\subsection{Problem Definition}
+
+Let the ego vehicle follow a planned path $\Gamma$ through an urban AV2 scene with replayed background traffic. At time $t$, the visible world state is $x_t^{\mathrm{vis}}$, while an occluded region $\mathcal{O}_t$ behind a road-side vehicle or other obstacle is not observed. A conventional planner produces a trajectory
+\begin{equation}
+  \tau^\star = \arg\min_{\tau \in \mathcal{T}(x_t^{\mathrm{vis}})} J_{\mathrm{MIND}}(\tau),
+\end{equation}
+where $\mathcal{T}$ is generated from visible-agent prediction. If a pedestrian is hidden in $\mathcal{O}_t$, the relevant state is instead $x_t = x_t^{\mathrm{vis}} \cup x_t^{\mathrm{hid}}$. Because $x_t^{\mathrm{hid}}$ is absent, the prediction and decision modules share the same structural blind spot. We call the resulting failure mode a prediction--decision chain fracture.
+
+For each occlusion candidate we define an ambush point $p_a$, a lane-center conflict point $p_c$, and an ego path coordinate $s_c$ where $\Gamma$ crosses $p_c$. PA-LOI does not require exact intent prediction for the hidden pedestrian; it asks whether the ego vehicle's current speed leaves enough margin for a bounded-rational emergence toward the lane center.
+
+\subsection{A Minimal Bounded-Rational Emergence Model}
+
+The bounded-rational model is deliberately minimal: it assigns no psychological state, attention level, or intent distribution to the pedestrian, but defines a policy class through three structural constraints and plans against the whole class. Let the hidden pedestrian occupy the occluded region $\mathcal{O}_t$ with position $q_t$, and let $V(q_t)$ denote the region visible from $q_t$ given the same occluder geometry.
+
+\emph{(i) Information bound.} The pedestrian decides using only $V(q_t)$: the occluder that hides the pedestrian from the ego vehicle also hides the ego vehicle from the pedestrian, so the crossing decision can be made while the approaching vehicle is outside $V(q_t)$.
+
+\emph{(ii) Satisficing decision rule.} The pedestrian commits to crossing when the perceived gap from the hidden position appears acceptable, $\hat{\tau}_{\mathrm{gap}}(V(q_t)) \ge \theta$, where the acceptance threshold $\theta$ is unknown to the ego vehicle and need not correspond to an objectively safe gap~\cite{simon1955behavioral,rasouli2020survey}. Gap-selection studies show that human crossing thresholds are heterogeneous and can be miscalibrated to vehicle speed~\cite{oxley2005crossing}, supporting treating $\theta$ as unknown; this is satisficing over incomplete information, not an optimal stopping policy.
+
+\emph{(iii) Capability bound.} The crossing speed is bounded, $\|\dot{q}_t\| \le v_{\max}$, and once a crossing is committed there is a nonzero reaction delay before the pedestrian can stop or reverse.
+
+We write $\Pi_{\mathrm{BR}}$ for the set of pedestrian behaviors consistent with (i)--(iii). PA-LOI does not estimate which member is present; it uses the capability bound to construct a conservative crossing-time speed boundary. The moving-pedestrian protocol in Section~IV realizes members of $\Pi_{\mathrm{BR}}$ over \SIrange{1.0}{3.0}{m/s}. Instant-center injection deliberately lies outside the finite-speed class: it is an outer stress envelope that asks how much approach-speed margin remains if the conflict point becomes occupied immediately, not a behaviorally valid trajectory or a formal guarantee case. Each bound still has an operational image in the risk layer. The information bound keys the phantom source to line-of-sight occlusion rather than detection (Section~III-C). The unknown threshold $\theta$ motivates planning without intent estimation. The capability bound keeps the class non-vacuous and supplies the quantities that size the safe-speed boundary (Section~III-D): it grounds the \SI{3.0}{m} lateral cap used in benchmark construction and bounds $t_{\mathrm{cross}}$; a reachability screen additionally labels sources whose required emergence speed exceeds $v_{\max}$, recorded for diagnosis in every run.
+
+These assumptions are weaker than predicting the precise pedestrian trajectory, yet stronger than treating every occluded region as equally dangerous: the risk source activates only when the hidden point is geometrically compatible with the ego path, the lateral distance is within range, and a conflict is reachable within the planning horizon.
+
+\subsection{Phantom Risk Source}
+
+PA-LOI constructs a phantom risk source at $p_c$ from fixed occlusion geometry. The source is active when the line-of-sight between the ego vehicle and $p_a$ is blocked and when the lateral hidden-to-lane distance $d_\perp = \|p_c - p_a\|$ is within the selected ghost-probe range. In the clean81 experiments, this range is capped at \SI{3.0}{m}, so that the hidden pedestrian can plausibly reach the ego path under the walking-speed sensitivity protocol.
+
+The phantom source enters the planner as a state-dependent potential. Let $n_c$ be the unit normal of the ego lane at the conflict point, and let the lateral clearance of the ego footprint to the conflict line be
+\begin{equation}
+  \ell(p) = \max\!\left(\,\bigl|n_c^{\top}(p - p_c)\bigr| - \tfrac{w_e}{2},\, 0\right),
+\end{equation}
+where $w_e$ is the ego width. The potential is the product of a lateral sigmoid gate, a time-to-arrival activation weight, and a velocity hinge:
+\begin{equation}
+  \Phi(p, v) =
+  w(t_a)\cdot
+  \underbrace{\frac{1}{1+\exp\!\bigl(k(\ell(p)-d_\perp)\bigr)}}_{S(\ell)}
+  \cdot\bigl[v - v_{\mathrm{safe}}\bigr]_+^{2},
+  \label{eq:phantom}
+\end{equation}
+where $[z]_+=\max(0,z)$ and $k$ controls the gate steepness. The gate $S(\ell)$ confines the penalty to trajectories whose lateral clearance is comparable to the hidden-to-lane distance; trajectories that pass far from the conflict line are not penalized. The activation weight ramps up as the ego time-to-arrival $t_a = d_s/v$ shrinks:
+\begin{equation}
+  w(t_a) = w_{\max}\,
+  \mathrm{clip}\!\left(\frac{T_{\mathrm{far}} - t_a}{T_{\mathrm{far}} - T_{\mathrm{near}}},\,0,\,1\right),
+  \label{eq:ttaweight}
+\end{equation}
+so that the source is invisible beyond $T_{\mathrm{far}}$, grows linearly as the conflict approaches, and saturates at $w_{\max}$ inside $T_{\mathrm{near}}$. Unlike a static potential field~\cite{khatib1986potential} or broad driving-safety-field formulation~\cite{wang2015drivingfield}, this field is explicitly tied to hidden emergence and longitudinal stopping feasibility. Two design choices matter for closed-loop stability. First, $\Phi$ contributes gradients only through the velocity channel of the state; lateral avoidance remains the responsibility of the original visible-agent collision potentials, which prevents the optimizer from trading a hidden risk against a steering excursion into real traffic. Second, the hinge form makes the potential and its gradient vanish identically for $v \le v_{\mathrm{safe}}$, so the vehicle can pass the occlusion at the bounded crawl speed instead of deadlocking in front of it. Fig.~\ref{fig:risk-profiles} visualizes both components.
+
+In implementation, $p_c$ is not selected by hand during simulation: it is obtained during dataset preparation by projecting the ego route onto the local lane geometry, the ambush point $p_a$ is placed behind or near the occluder on the emergence side, and the pair is accepted only under the lateral and trigger-timing constraints of Section~IV-B. The phantom source thus compresses a family of hidden pedestrian states---which a belief-state planner would track as particles or reachable sets behind every occluder---into a single conflict-centered source, because the planning question is not ``where exactly is the pedestrian?'' but ``how fast can the ego vehicle approach the conflict point while retaining a feasible response?'' This keeps the risk term lightweight enough for a large closed-loop queue while preserving the safety-relevant geometry.
+
+\subsection{Safe-Speed Boundary}
+
+Let $d_s = s_c - s_{\mathrm{ego}}$ be the path-aligned distance from the ego vehicle to the conflict point. With reaction or planning latency $\tau_r$, comfortable deceleration $a_b$, and safety margin $\delta$, the stopping feasibility condition is
+\begin{equation}
+  v\tau_r + \frac{v^2}{2a_b} + \delta \le d_s.
+\end{equation}
+Solving for the maximum feasible speed gives
+\begin{equation}
+  v_{\mathrm{safe}}(d_s) =
+  \max\!\left(0,
+  -a_b\tau_r + \sqrt{a_b^2\tau_r^2 + 2a_b(d_s-\delta)}
+  \right).
+  \label{eq:vsafe}
+\end{equation}
+When the ego vehicle approaches a phantom source too quickly, the planner receives a penalty before the pedestrian is injected. This is the mechanism that converts hidden bounded-rational emergence into a computationally actionable decision boundary. Equation~\eqref{eq:vsafe} is also, run as a hard per-step clamp, exactly the supervisory bound of the Reachable-set baseline in Section~IV-D, which is what makes the later comparison a controlled test of constraint mapping and relaxation rather than of physics.
+
+The deployed system instantiates this boundary in a crossing-time form that is anchored to the hidden pedestrian rather than to a generic obstacle. If a pedestrian behind the occluder needs $t_{\mathrm{cross}} = d_\perp / v_{\mathrm{ped}}$ to reach the lane center at nominal walking speed $v_{\mathrm{ped}}$, then a vehicle that can brake at $a_b$ may pass the occlusion at any speed it can shed within that window. The implemented bound is
+\begin{equation}
+  v_{\mathrm{safe}} =
+  \max\!\Bigl(
+  \min\!\bigl(a_b\,t_{\mathrm{cross}},\, v\bigr),\;
+  \eta\,v,\;
+  v_{\mathrm{floor}}
+  \Bigr),
+  \label{eq:vsafe-impl}
+\end{equation}
+with three deliberate relaxations of the strict form in~\eqref{eq:vsafe}. The inner $\min$ prevents the bound from requesting acceleration. The comfort factor $\eta$ caps any single activation at a bounded fraction of the current speed, keeping the deceleration request smooth for the trajectory optimizer and for passengers. The floor $v_{\mathrm{floor}}$ guarantees that the bound never drives the commanded speed to zero in front of a persistent occlusion, which removes the planning deadlock we observed with a plain quadratic speed penalty. The floor is chosen below the \SI{3.0}{m/s} low-severity reporting threshold, so the bound's \emph{converged} residual approach speed lies in the low-severity regime; the comfort term relaxes this only transiently, and when the trigger arrives before convergence the residual speed can exceed the threshold---the \SI{3.0}{m} trigger row of Table~\ref{tab:distance-safety} shows exactly that regime. The empirical hit-only impact speed of \SI{2.75}{m/s} in Section~V is consistent with this design intent; we state it as a design-consistency property rather than a formal guarantee, since AEB and the optimizer interact with the bound in closed loop.
+
+The boundary is intentionally expressed in speed--distance form rather than in terms of a future realized ego trajectory: the ego vehicle may brake after PA-LOI changes the plan, so the evaluation trigger is likewise defined geometrically with respect to the conflict point (Section~IV-C), serving MIND, AEB-only, and PA-LOI alike.
+
+\subsection{Velocity-Aware Risk Cost and AEB Integration}
+
+PA-LOI augments MIND's original objective with the phantom potentials of all active risk sources $\mathcal{G}$:
+\begin{equation}
+  J(\tau) = J_{\mathrm{MIND}}(\tau)
+  + \sum_{g\in\mathcal{G}}\sum_{t}\Phi_g(p_t,v_t),
+  \label{eq:objective}
+\end{equation}
+where each $\Phi_g$ follows~\eqref{eq:phantom} with its own conflict geometry, activation weight, and safe-speed bound. The hinge design preserves normal driving when the ego speed is already below the safe boundary and concentrates the penalty on unsafe approach speeds. The same hinge term, aggregated by the maximum over sources, is added to the candidate-tree scoring stage, so branch selection and trajectory refinement see a consistent risk preference.
+
+AEB remains active as an independent fallback that monitors visible agents only. A threat assessor combines graded time-to-collision (TTC) thresholds with an RSS-style minimum gap~\cite{shalev2017rss},
+\begin{equation}
+  d_{\mathrm{rss}} = \max\!\left(v\,\tau_{\mathrm{rsp}} + \frac{v^{2}}{2a_{\max}},\; d_{\min}\right),
+  \label{eq:rss}
+\end{equation}
+with response time $\tau_{\mathrm{rsp}}$, maximum braking $a_{\max}$, and a minimum standoff $d_{\min}$, plus an inevitable-collision check against the physical braking distance $v^2/2a_{\max}$. Lateral admission gates differ for pedestrians and vehicles so that a crossing pedestrian is acquired early without braking for adjacent-lane traffic. The deployed fallback is deliberately latched---once any threat level is confirmed, the controller commands maximum braking until standstill, because a last-resort layer should not negotiate with the hazard---with a hysteresis counter against threat-level chattering and a kinematic clamp $a \ge -v/\Delta t$ that forbids braking through zero into reverse. The full stack thus has three layers: MIND for integrated prediction--decision planning, PA-LOI for proactive occlusion-risk shaping, and AEB for late emergency braking; Fig.~\ref{fig:system} summarizes the pipeline. Table~\ref{tab:paloi-parameters} lists all parameters exactly as deployed, so that the reported behavior can be reproduced without consulting the source code.
+
+\input{tables/paloi_parameters.tex}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/risk_field_profiles.pdf}
+  \caption{Shape of the PA-LOI risk layer. (a)~Lateral sigmoid gate $S(\ell)$ for three hidden-to-lane distances. (b)~Hinge velocity cost as $w(t_a)$ ramps up with shrinking time-to-arrival. (c)~Strict stopping-feasibility bound~\eqref{eq:vsafe}. (d)~Deployed crossing-time instantiation~\eqref{eq:vsafe-impl} with comfort cap and strictly positive crawl floor.}
+  \label{fig:risk-profiles}
 \end{figure}
 
-\subsection{Dynamic Risk Corridor}
-When the ego vehicle approaches an occluding object (e.g., a parked bus), PA-LOI constructs a \emph{dynamic risk corridor} centered on the occluded region. The corridor parameters are defined as:
-\begin{align}
-    d_{\text{critical}} &= d_{\text{vehicle}} + v_{\text{ego}} \cdot t_{\text{buffer}}, \label{eq:dcrit} \\
-    d_{\text{outer}} &= \max(d_{\text{lane}}, d_{\text{critical}} + d_{\text{margin}}). \label{eq:douter}
-\end{align}
-where $d_{\text{vehicle}}$ is the vehicle half-width, $v_{\text{ego}}$ is the current ego velocity, $t_{\text{buffer}}$ is a safety time margin, $d_{\text{lane}}$ is the lane half-width, and $d_{\text{margin}}$ (set to \SI{0.5}{\meter} in our experiments) provides an additional lateral safety buffer ensuring the corridor encapsulates edge-case positioning. Crucially, $t_{\text{buffer}}$ is calibrated to align with the conservative \SI{-4.0}{\meter\per\second\squared} deceleration limit assumed by the downstream AEB, ensuring that the required physical braking envelope remains consistent under degraded friction conditions.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.70\textwidth]{figures/system_architecture.pdf}
+  \caption{Closed-loop evaluation pipeline. AV2 replay provides background traffic and JSONL files fix the ghost geometry; MIND's predictor and scenario-tree generator are unchanged; PA-LOI screens occlusions, computes the activation weight and safe-speed bound, and injects the velocity-hinge potential into the trajectory optimizer; a latched AEB assessor and a kinematic clamp post-process the command.}
+  \label{fig:system}
+\end{figure*}
 
-The risk cost for trajectory $\tau$ passing through the corridor is:
-\begin{equation}
-    C_{\text{risk}}(\tau) = w_{\text{risk}} \sum_{t} \phi(d_{\text{lat}}(t), d_{\text{long}}(t)),
-    \label{eq:risk_cost}
-\end{equation}
-where $\phi(\cdot)$ is a distance-dependent risk kernel and $w_{\text{risk}}$ is a tunable weight. The generative logic for this risk field is summarized in Algorithm~\ref{alg:risk_field}.
-
-\begin{algorithm}[htbp]
-\caption{Dynamic Risk Field Generation}
-\label{alg:risk_field}
-\begin{algorithmic}[1]
-\REQUIRE Ego state $s_{\text{ego}}$, Map $\mathcal{M}$, Occlusions $\mathcal{O}$
-\ENSURE Risk cost field $C_{\text{risk}}$
-\FOR{each occlusion $o \in \mathcal{O}$}
-    \IF{$\text{Distance}(s_{\text{ego}}, o) < d_{\text{trigger\_zone}}$}
-        \STATE Compute $d_{\text{critical}}$ using Eq.~\eqref{eq:dcrit}
-        \STATE Compute $d_{\text{outer}}$ using Eq.~\eqref{eq:douter}
-        \STATE $C_{\text{risk}} \gets C_{\text{risk}} + w_{\text{risk}} \cdot \phi(d_{\text{critical}}, d_{\text{outer}})$
-    \ENDIF
-\ENDFOR
-\RETURN $C_{\text{risk}}$
-\end{algorithmic}
-\end{algorithm}
-
-\subsection{AEB Module}
-The AEB module implements a TTC-based emergency braking strategy. Upon detecting an obstacle within the critical TTC threshold ($T_{\text{critical}} = \SI{1.4}{\second}$), the system applies a maximum braking deceleration of $a_{\text{max}} = \SI{-4.0}{\meter\per\second\squared}$. While modern AEB systems can achieve up to \SI{-8.0}{\meter\per\second\squared} on dry asphalt, we intentionally adopt a conservative \SI{-4.0}{\meter\per\second\squared} limit to represent degraded road friction conditions (e.g., wet or slippery surfaces) and to avoid passenger injury from extreme jerk. This allows us to observe the safety boundaries and the value of proactive deceleration under worst-case physical constraints. Once triggered, the AEB maintains braking until the vehicle reaches a complete stop, preventing oscillatory release-and-reaccelerate behavior.
-
-% ============================================================
-% IV. Experimental Setup
-% ============================================================
 \section{Experimental Setup}
 
-\subsection{Simulation Environment}
-Experiments are conducted on a scenario derived from the Argoverse~2 Motion Forecasting dataset~\cite{argoverse2}, which provides realistic road geometry, surrounding traffic agents, and high-definition map information. The simulation runs at \SI{50}{\hertz} (physics) with a planning rate of \SI{10}{\hertz}.
+\subsection{AV2 Clean81 Construction}
 
-\subsection{Ghost Probe Scenario Selection}
-To comprehensively evaluate the PA-LOI planner's safety performance against severe occlusions, two distinct zero-shot testing scenarios are selected from the Argoverse~2 dataset (Figure~\ref{fig:scenarios}):
-\begin{enumerate}
-    \item \textbf{Straight Road with Dense Parked Vehicles (Generalization Scenario)}: As shown in Figure~\ref{fig:scenarios}a, the ego vehicle travels along a straight urban avenue flanked by a dense, continuous row of parked vehicles on the right side. This ``visual wall'' completely obscures the sidewalk. A pedestrian suddenly emerges from the front blind spot of a parked vehicle (No.22153) and traverses the ego vehicle's path. This tests the system's capacity to maintain continuous proactive defense against contiguous static occluders.
-    \item \textbf{Complex Intersection with Stopped Traffic}: As shown in Figure~\ref{fig:scenarios}b, the ego vehicle traverses a busy four-way intersection. A vehicle stopped or waiting in the adjacent right lane (No.199599) heavily occludes the approach area near the intersection center. A pedestrian darts out from the front edge of this stopped vehicle. This assesses the system's ability to navigate localized blind spots caused by queuing traffic in complex topologies.
-\end{enumerate}
+We use AV2 as the source of map geometry and traffic replay~\cite{argoverse2}. Candidate scenarios are selected for road-side occlusion, ego-lane relevance, feasible trigger timing, and a hidden-to-lane lateral distance not exceeding \SI{3.0}{m}. The final clean81 set contains the original clean21 scenes and 60 additional scenes screened from AV2; the selection flow and an unfiltered candidate-pool analysis are audited in Section~IV-B and Supplementary Table~S4.
 
-\begin{figure}[ht]
-    \centering
-    \subfloat[Straight road]{\includegraphics[width=0.48\columnwidth]{figures/straight_road.png}}
-    \hfill
-    \subfloat[Complex intersection]{\includegraphics[width=0.48\columnwidth]{figures/intersection.png}}
-    \caption{Overview of the two adversarial ghost probe scenarios. (a) A straight road where dense roadside parking conceals crossing pedestrians. (b) A complex intersection where a stopped vehicle creates a severe localized blind spot.}
-    \label{fig:scenarios}
-\end{figure}
+Each selected scenario is stored in a JSONL record containing the AV2 scenario id, ambush point, target lane-center point, approach direction, occluder type, estimated trigger frame, and lateral hidden-to-lane distance. The same JSONL file drives preview rendering and closed-loop simulation, preventing any mismatch between paper figures and injection geometry; Fig.~\ref{fig:scenario-overview} shows representative scenes.
 
-Both scenarios employ a rigorous, deterministic trigger mechanism inspired by the Euro NCAP Car-to-Pedestrian Nearside (CPNA) protocol~\cite{euroncap2023}. The pedestrian (``ghost probe'') is spawned precisely when the ego vehicle breaches a predefined longitudinal trigger distance $d_{\text{trigger}}$ relative to the crossing point. The intersection scenario uses $d_{\text{trigger}} \in \{3.0, 3.5, 4.0, 4.3, 4.5, 5.0, 5.5\}$~m (seven distances), while the straight road scenario uses $d_{\text{trigger}} \in \{3.0, 3.5, 4.0, 4.5, 5.0\}$~m (five distances). Front-bumper clearances are computed as $d_{\text{bumper}} = d_{\text{trigger}} - \SI{2.25}{\meter}$ (vehicle half-length). Upon triggering, the pedestrian crosses with an abrupt lateral burst speed of \SI{2.0}{\meter\per\second} from a \SI{1.5}{\meter} offset and halts exactly at the lane center. This standardized ambush forces an adversarial worst-case geometry, guaranteeing a collision if the ego vehicle fails to perform preemptive deceleration.
+\subsection{Scenario Filtering and Exclusion Audit}
 
-\subsection{System Configurations}
-Four configurations are evaluated under identical conditions:
-\begin{enumerate}
-    \item \textbf{Vanilla MIND}: The baseline iLQR planner with no occlusion awareness and no AEB. The vehicle drives at the planner's preferred speed profile.
-    \item \textbf{AEB Only}: The standard MIND planner (no occlusion awareness) augmented with a reactive AEB module ($a_{\text{max}} = \SI{-4.0}{\meter\per\second\squared}$).
-    \item \textbf{PA-LOI + AEB}: The MIND planner integrated with the PA-LOI occlusion risk field, augmented with the same AEB module.
-    \item \textbf{Conservative WCA}: A Worst-Case Assumption baseline acting as a simplified longitudinal surrogate for the Responsibility-Sensitive Safety (RSS) model. It calculates the strict physical upper bound on ego velocity required to unconditionally stop before reaching any unobservable zone boundary, capping the target speed to mathematically guarantee zero collision.
-\end{enumerate}
+The clean81 construction follows a two-stage filtering procedure. The first stage searches AV2 scenarios for occlusion candidates near the ego route: a plausible occluder, a lane-center target on the ego vehicle's future path, and a hidden-to-lane lateral distance no greater than \SI{3.0}{m}. This search produced 90 candidates; 88 have complete three-stack strict-650 screening records, while two incomplete records were not used. The second stage retains 60 scenes that satisfy the protocol-integrity checks and removes cases that would confound the ghost-probe conclusion. Scenes are screened out if the ego collides with replayed background traffic before the ghost interaction, if the pedestrian cannot be triggered within the intended horizon or only too late to interpret the outcome, or if the rendered geometry does not match the hidden-emergence story. The 60 retained records are identified before the journal analysis and concatenated with clean21.
 
-\subsection{Evaluation Metrics}
-\begin{itemize}
-    \item \textbf{Collision occurrence}: Binary outcome (collision / safe stop).
-    \item \textbf{Impact velocity} $v_{\text{imp}}$: Ego velocity at the moment of collision (\si{\meter\per\second}).
-    \item \textbf{Safe critical distance}: The minimum $d_{\text{bumper}}$ at which the system achieves zero collision.
-\end{itemize}
+To expose selection dependence, Supplementary Table~S4 restores all 88 log-complete candidates, including the 28 screened-out scenes, under strict-650 accounting. PA-LOI remains first (52.3\% low severity versus 15.7\% and 4.5\%; velocity-squared proxy 10.15 versus 31.96 and 42.06), so filtering changes magnitude but not ordering. The archive includes the geometry, screening records, identifiers, and audit script.
 
-% ============================================================
-% V. Results
-% ============================================================
-\section{Experimental Results}
+AV2 replay is a deliberate choice of instrument, not a convenience. The scientific question is whether a proactive layer reshapes the approach speed more effectively than published occlusion-aware bounds on the \emph{same} hazard; an interactive simulator, in which surrounding agents react differently to each planner, would change the hazard itself and confound the comparison. Replay fixes the map, the agents, and the injected geometry, so outcome differences are attributable to the proactive layer. The cost is that replayed agents do not adapt to ego behavior: if the ego deviates from the logged trajectory, replayed agents may create collisions unrelated to the injected pedestrian. Such cases are not clean ghost-probe trials, so we separate them and report no-ghost replay collisions under a dedicated protocol.
 
-\subsection{Quantitative Results}
+\subsection{Fixed Geometry and Trigger Semantics}
 
-\subsubsection{Scenario A: Complex Intersection}
-Table~\ref{tab:results_intersection} presents the collision outcomes for the first scenario, evaluating the system against severe localized blind spots caused by queuing traffic at a crossroad.
+For every clean81 record, the ghost geometry is fixed before running any baseline. The trigger distance is measured along the ego route from the ego vehicle to the lane-center conflict point. When this distance crosses the selected threshold, the pedestrian is injected according to the protocol. The trigger is therefore independent of the planner's eventual braking profile. If PA-LOI slows down early, the trigger occurs at a later frame but the same physical distance, so the result reflects how much safety margin each method has preserved by that point.
 
-\begin{table}[htbp]
-\caption{Collision Outcomes in Complex Intersection Scenario}
-\label{tab:results_intersection}
-\centering
-\renewcommand{\arraystretch}{1.15}
-\begin{tabular}{cc|cc|cc|cc|cc}
-\toprule
-\multirow{2}{*}{\shortstack{$d_{\text{trigger}}$\\(m)}} & 
-\multirow{2}{*}{\shortstack{$d_{\text{bumper}}$\\(m)}} & 
-\multicolumn{2}{c|}{Vanilla} & 
-\multicolumn{2}{c|}{AEB Only} & 
-\multicolumn{2}{c|}{PA-LOI+AEB} &
-\multicolumn{2}{c}{Cons.\ WCA} \\
-& & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ \\
-\midrule
-3.0 & 0.75 & \cmark & 4.59 & \cmark & 3.99 & \cmark & 2.28 & \xmark & -- \\
-3.5 & 1.25 & \cmark & 4.53 & \cmark & 3.96 & \cmark & 1.87 & \xmark & -- \\
-4.0 & 1.75 & \cmark & 4.57 & \cmark & 3.46 & \cmark & 1.16 & \xmark & -- \\
-4.3 & 2.05 & \cmark & 4.55 & \cmark & 2.88 & \xmark & -- & \xmark & -- \\
-4.5 & 2.25 & \cmark & 4.49 & \cmark & 2.88 & \xmark & -- & \xmark & -- \\
-5.0 & 2.75 & \cmark & 4.60 & \cmark & 2.15 & \xmark & -- & \xmark & -- \\
-5.5 & 3.25 & \cmark & 4.66 & \xmark & -- & \xmark & -- & \xmark & -- \\
-\bottomrule
-\end{tabular}
-\vspace{1mm}
-\footnotesize{Col.: collision occurred (\cmark = yes, \xmark = no); $v_{\text{imp}}$: impact vel (m/s).}
-\end{table}
+The main stress test uses instant-center injection, intentionally harsher than a physically walked emergence because the conflict point is occupied immediately after triggering. It answers a worst-case planning question: if the occluded pedestrian appears directly in the ego path at a fixed remaining distance, has the vehicle already reduced speed enough to make the event safe? The moving-pedestrian protocol then checks whether the conclusion survives when the pedestrian must travel from the ambush point to the lane center at finite speed.
 
-\subsubsection{Scenario B: Straight Road with Dense Parked Vehicles}
-Table~\ref{tab:results_straight} illustrates the outcomes for the generalization scenario, subjecting the vehicle to a continuous "visual wall" formed by dense roadside parking along a high-speed arterial stretch.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.66\textwidth]{figures/scenario_overview.pdf}
+  \caption{Representative AV2 ghost-probe scenes from clean81: ego route, trigger point, lane-center conflict point, hidden ghost start, and dash-out direction. Each panel spans at least \SI{27}{m} across; the geometry is fixed in JSONL so that rendering and closed-loop simulation share the same hazard definition.}
+  \label{fig:scenario-overview}
+\end{figure*}
 
-\begin{table}[htbp]
-\caption{Collision Outcomes in Straight Road Scenario (Generalization)}
-\label{tab:results_straight}
-\centering
-\renewcommand{\arraystretch}{1.15}
-\begin{tabular}{cc|cc|cc|cc|cc}
-\toprule
-\multirow{2}{*}{\shortstack{$d_{\text{trigger}}$\\(m)}} & 
-\multirow{2}{*}{\shortstack{$d_{\text{bumper}}$\\(m)}} & 
-\multicolumn{2}{c|}{Vanilla} & 
-\multicolumn{2}{c|}{AEB Only} & 
-\multicolumn{2}{c|}{PA-LOI+AEB} &
-\multicolumn{2}{c}{Cons.\ WCA} \\
-& & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ & Col. & $v_{\text{imp}}$ \\
-\midrule
-3.0 & 0.75 & \cmark & 7.75 & \cmark & 7.67 & \cmark & 2.26 & \xmark & -- \\
-3.5 & 1.25 & \cmark & 7.75 & \cmark & 7.27 & \cmark & 1.23 & \xmark & -- \\
-4.0 & 1.75 & \cmark & 7.75 & \cmark & 7.27 & \xmark & -- & \xmark & -- \\
-4.5 & 2.25 & \cmark & 7.75 & \cmark & 6.87 & \xmark & -- & \xmark & -- \\
-5.0 & 2.75 & \cmark & 7.75 & \cmark & 6.39 & \xmark & -- & \xmark & -- \\
-\bottomrule
-\end{tabular}
-\vspace{1mm}
-\footnotesize{Col.: collision occurred (\cmark = yes, \xmark = no); $v_{\text{imp}}$: impact vel (m/s). WCA results follow from its mathematical safety guarantee (Sec.~IV-C).}
-\end{table}
+\subsection{Ghost-Probe Main Protocol}
 
-\subsection{Analysis}
+The main clean81 protocol evaluates three primary stacks: (i) PA-LOI + AEB, denoted as PA-LOI, (ii) AEB-only, and (iii) MIND without PA-LOI or AEB intervention. To position PA-LOI against the occlusion-aware literature on identical hazards, we additionally evaluate two published designs, re-implemented as output-side velocity-bound supervisors wrapped around the unmodified MIND plan and sharing the same AEB shield and physical parameters as PA-LOI. (iv)~The set-based reachability bound (\emph{Reachable-set})~\cite{orzechowski2018tackling,koschi2021setbased} requires, at each control step, that the ego either stop before the conflict point or provably clear it before a hidden pedestrian crossing at the shared design speed could arrive ($v_{\mathrm{ped}}=\SI{2.0}{m/s}$, the same crossing-speed assumption used by PA-LOI's bound in~\eqref{eq:vsafe-impl}, below the $\Pi_{\mathrm{BR}}$ sprint bound); otherwise it clamps the commanded speed to the strict stopping-feasibility bound of~\eqref{eq:vsafe}. (v)~The dynamic-shadow tracker (\emph{Dynamic-shadow})~\cite{nager2019shadows} maintains, per occluder, the nearest still-hidden pedestrian frontier and propagates it over time: corridor depth already verified empty by line of sight cannot spawn a pedestrian, while a hidden pedestrian may advance at the design crossing speed. Both baselines reuse only the PA-LOI occlusion screening front-end as a static-occluder detector and consume none of the shaping machinery (no time-to-arrival weight, hinge potential, comfort cap, or crawl floor), so the comparison isolates the constraint-mapping design choice; they are analyzed in Section~\ref{subsec:occ-baselines}. Each scene is tested at six trigger distances (\SIlist{5.5;5.0;4.5;4.0;3.5;3.0}{m}, measured along the ego route as in Section~IV-C), and for the main stress test the pedestrian is injected at the lane-center conflict point. This instant-center protocol removes ambiguity about whether a slow pedestrian simply failed to reach the ego path and isolates the planner's ability to manage late-appearing hazards. Together with the no-ghost, pedestrian-speed, extended-distance, and parameter-perturbation protocols and the two baseline sweeps, this yields the 4050 closed-loop runs itemized in Section~IV-I.
 
-\subsubsection{Vanilla MIND}
-Across both scenarios, the Vanilla baseline has no awareness of unobservable threats. In the intersection scenario, it maintains a steady \SI{4.5}{\meter\per\second} cruising speed into the collision. In the straight-road scenario, the vehicle maintains its full speed of \SI{7.75}{\meter\per\second} (approx.\ \SI{28}{\kilo\meter\per\hour}), resulting in uniformly high-energy collisions at all trigger distances.
+Two horizon accountings are used, and both are disclosed. Every task is first run with a 650-frame horizon, or shorter if the planner fails or the simulator terminates. Because the trigger is a physical distance, a strongly decelerating stack may reach it only near the end of that horizon; tasks whose ghost had not spawned, or spawned too late to resolve, were rerun once with an 800-frame horizon so that every cell of the primary three-stack protocol carries a definite outcome. This completion rule is applied by outcome, not by method; it affects 122 of the 1458 rows (116 PA-LOI, 6 AEB-only, 62 of them with spawn frames beyond 650). The five-system comparison in Section~\ref{subsec:occ-baselines} instead enforces a strict single 650-frame horizon for every system, treats non-spawning as first-class conservatism information, and restricts safety statistics to each system's \emph{evaluable} tasks: those in which the ghost spawns and either a collision occurs or at least \SI{1.5}{s} of horizon remains after the spawn. Section~\ref{subsec:clean81-safety} reports both accountings side by side. The primary severity metric is low-severity outcome: no collision or a ghost contact speed no greater than \SI{3.0}{m/s}. This threshold is not treated as zero collision; zero-collision rate is always reported separately. We also report ghost-collision counts, background-collision counts, all-task mean impact speed, hit-only impact speed, and an all-task velocity-squared proxy for kinetic harm.
 
-\subsubsection{AEB Only (Baseline)}
-The addition of reactive AEB highlights the physical limits of post-emergence braking. In the intersection setup (Table~\ref{tab:results_intersection}), AEB prevents collisions only beyond $d_{\text{bumper}} = \SI{3.25}{\meter}$. This limitation is amplified in the high-speed straight road scenario (Table~\ref{tab:results_straight}), where the vehicle approaches at \SI{7.5}{\meter\per\second}. At this speed, with $a_{\text{max}} = \SI{-4.0}{\meter\per\second\squared}$, the required braking distance is:
+\subsection{Metric Definitions}
+
+Let $\mathcal{R}$ be a set of runs. For run $i$, let $g_i$ indicate a collision with the injected ghost pedestrian, let $b_i$ indicate a collision with replayed background traffic, and let $c_i = g_i \vee b_i$ indicate a collision of any type. Let $v_i^{\mathrm{imp}}$ be the ghost impact speed, set to zero when no ghost collision occurs. The zero-collision rate is
 \begin{equation}
-    d_{\text{brake}} = \frac{v^2}{2|a_{\text{max}}|} = \frac{7.5^2}{2 \times 4.0} = \SI{7.03}{\meter}.
+  R_{\mathrm{zero}} =
+  \frac{1}{|\mathcal{R}|}\sum_{i\in\mathcal{R}}\mathbf{1}[c_i=0].
 \end{equation}
-This far exceeds the available clearance, preventing collision avoidance even at the \SI{5.0}{\meter} maximum testing boundary.
+The low-severity outcome rate is
+\begin{equation}
+  R_{\mathrm{low}} =
+  \frac{1}{|\mathcal{R}|}\sum_{i\in\mathcal{R}}
+  \mathbf{1}\bigl[c_i=0 \ \mathrm{or}\ (g_i=1 \ \mathrm{and}\ v_i^{\mathrm{imp}}\le \SI{3.0}{m/s})\bigr].
+\end{equation}
+Both metrics count a background-only collision as unsafe. This choice is conservative for PA-LOI, the only stack with such runs in the main protocol (three in Table~\ref{tab:main-safety}).
+The all-task impact speed is $\bar{v}_{\mathrm{all}}=|\mathcal{R}|^{-1}\sum_i v_i^{\mathrm{imp}}$, and the velocity-squared proxy is
+\begin{equation}
+  E_v =
+  \frac{1}{|\mathcal{R}|}\sum_{i\in\mathcal{R}}(v_i^{\mathrm{imp}})^2.
+\end{equation}
+Impact speed is reported because pedestrian injury and fatality risk are strongly speed-dependent~\cite{rosen2009fatality}. The velocity-squared proxy is proportional to kinetic energy when mass is held constant, but we do not claim it is a validated injury metric; it is used as one severity-oriented criticality measure among several reported metrics~\cite{westhofen2023criticality}. The hit-only impact speed is computed only over runs with $g_i=1$ and is used to show whether the system reduces the severity of unavoidable contacts.
 
-\subsubsection{PA-LOI + AEB}
-The PA-LOI integration fundamentally changes the hazard profile through proactive speed management. In the intersection scenario, PA-LOI achieves safe stops from $d_{\text{bumper}} = \SI{2.05}{\meter}$ outwards by governing the ingress velocity down to approximately \SI{3.2}{\meter\per\second}. 
+Each cell of every protocol is a single closed-loop run. Because outcomes are correlated within a scene across trigger distances, interval estimates use a percentile scene-clustered bootstrap: scenes are resampled with replacement ($10^{4}$ resamples, fixed seed) and the rates are recomputed, giving 95\% confidence intervals whose effective replication unit is the scene ($n=81$), not the task. Pairwise per-cell comparisons use exact two-sided sign tests. All statistics are computed from the archived per-run records by scripts in the accompanying archive.
 
-In the straight road scenario, where AEB alone failed at all distances, PA-LOI reduces the nominal \SI{7.75}{\meter\per\second} approach speed to a defensive pace upon detecting the continuous occlusion wall. This enables zero-collision safe stops from $d_{\text{bumper}} = \SI{1.75}{\meter}$ ($d_{\text{trigger}} = \SI{4.0}{\meter}$). Even at the shortest distances ($d_{\text{trigger}} = 3.0$ and \SI{3.5}{\meter}), where collision is physically unavoidable, PA-LOI substantially reduces the approach energy, lowering the impact velocity from \SI{7.75}{\meter\per\second} to \SI{2.26}{\meter\per\second}---a \textbf{71\%} reduction in impact speed.
+For no-ghost driving, efficiency is evaluated only on the closed-loop control segment: mean speed, traveled distance, slow-frame ratio below \SI{6}{m/s}, near-stop ratio below \SI{0.3}{m/s}, planner failure, ground-truth replay collision, and full-horizon completion. Planner failure is treated as planning infeasibility rather than as a physical collision; MIND can fail when its scenario tree finds no end node under dense replay interactions, while PA-LOI avoids entering those states through earlier deceleration.
 
-\subsubsection{Conservative WCA}
-The Worst-Case Assumption baseline avoids collisions at all distances in both scenarios, as expected from its strict kinetic constraints that mathematically guarantee stopping before any occlusion boundary. However, this absolute safety comes at the cost of severe operational inefficiency in false-positive (no emergence) scenarios, as detailed in the trade-off section.
+\subsection{No-Ghost Efficiency and Stability Protocol}
 
-\subsubsection{Safety Boundary Improvement}
-In the intersection scenario, PA-LOI + AEB reduces the minimum safe front-bumper clearance from \SI{3.25}{\meter} (AEB-only) to \SI{2.05}{\meter}, a \textbf{37\%} reduction. In the straight road scenario, the improvement is even more dramatic: AEB alone cannot prevent collision at any tested distance (up to \SI{2.75}{\meter}), while PA-LOI + AEB achieves zero collision from just \SI{1.75}{\meter}. As illustrated in Fig.~\ref{fig:generalization}, additional generalized tests confirmed this capability is robust: varying the pedestrian crossing speed between \SI{1.0}{\meter\per\second} and \SI{3.0}{\meter\per\second} yielded consistent safety boundary improvements. This verifies that controlling the ego vehicle's arrival kinetic energy is the dominant factor in collision avoidance.
+The no-ghost protocol uses the same clean81 scenes without injecting a pedestrian, comparing PA-LOI, MIND, and the two occlusion-aware baselines over 324 runs under the efficiency metrics of Section~IV-E. AEB-only is not run separately here because it wraps the unmodified MIND plan and alters it only when its emergency trigger fires. This test quantifies whether the occlusion-aware risk field imposes excessive conservatism when no pedestrian emerges.
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\columnwidth]{figures/speed_generalization.pdf}
-\caption{Safe critical clearance ($d_{\text{bumper}}$) across varying pedestrian speeds. PA-LOI + AEB maintains a robust and consistent safety margin advantage across all tested pedestrian walking and running speeds.}
-\label{fig:generalization}
+\subsection{Pedestrian-Speed Sensitivity Protocol}
+
+The instant-center protocol is intentionally severe, but it does not model walking motion from the ambush point. To test whether the conclusion depends on this abstraction, we construct a representative 30-scene subset with short hidden-to-lane lateral distance. After removing three scenes with invalid or mismatched emergence behavior in the speed protocol, 27 scenes remain. For each retained scene, the pedestrian starts at the hidden ambush point and moves toward the ego lane at \SIlist{1.0;1.5;2.0;3.0}{m/s}. The trigger distance is fixed at \SI{5.5}{m}, and the same three primary stacks are evaluated. This yields 324 sensitivity tasks. The same dash protocol is additionally run at \SI{4.5}{m} and \SI{3.5}{m} triggers for three of the four walking speeds (\SIlist{1.0;2.0;3.0}{m/s}), with the same stacks and horizon, adding 486 tasks.
+
+\subsection{Risk-Layer Parameter-Perturbation Protocol}
+
+Six one-dimensional variants perturb one risk-layer parameter of Table~\ref{tab:paloi-parameters} each---$\eta\in\{0.4,0.8\}$, $v_{\mathrm{floor}}\in\{1.0,3.0\}$\,m/s, $w_{\max}\in\{15,35\}$---with all other parameters, code, and protocols fixed: the instant-center protocol on the 27-scene set at \SI{5.5}{m} and \SI{4.0}{m} triggers (650 frames) plus the no-ghost protocol, 486 tasks in total. The deployed point is not rerun; its reference row comes from the published strict-650 ghost and no-ghost tables restricted to the identical cells, so reference and variants share code, horizon, and accounting. A sufficiently conservative variant can fail to reach the trigger within the horizon; such unspawned cells count as safe under the all-cell accounting, so spawn counts and spawned-only rates are reported alongside and the paired analysis of Section~\ref{subsec:param-sensitivity} uses only cells where both members spawn.
+
+\subsection{Logging and Reproducibility}
+
+Every task stores a task identifier, baseline, trigger condition, source split, scene index, spawn frame, summary path, collision flags, and impact-speed fields; no-ghost tasks additionally store planner failure frame, closed-loop distance, frame count, and replay-collision flags. Before any table is generated, the analysis scripts validate the expected row counts and condition coverage: 1458 primary ghost tasks, 162 primary no-ghost tasks, and 324 speed-sensitivity tasks, plus 972 ghost-probe and 162 no-ghost runs of the two occlusion-aware baselines on the identical scenes, and the 972-task sensitivity sweep (486 extended-distance dash tasks and 486 parameter-perturbation tasks) validated by its own aggregation script---4050 closed-loop runs in total, as quoted in the abstract. The paper figures and tables are then regenerated from the validated files. New scenes can be appended as JSONL records and rerun through the same queue scripts, while failed or ambiguous cases are archived outside the clean set; Supplementary Table~S4 separately restores every log-complete screening candidate to quantify the resulting selection effect.
+
+The unchanged closed-form risk layer was previously measured at \SI{0.55}{ms} per frame on a single-threaded Apple M3 with 20 surrounding agents, or 0.55\% of the \SI{100}{ms} budget at \SI{10}{Hz}~\cite{paloi_itsc2026}. This is carried-over module timing rather than a new journal experiment; end-to-end latency remains hardware and host-planner dependent.
+
+\section{Results}
+
+\subsection{Clean81 Safety}
+\label{subsec:clean81-safety}
+
+\input{tables/main_safety.tex}
+
+Table~\ref{tab:main-safety} summarizes the clean81 main experiment under the all-task accounting of Section~IV-D. PA-LOI achieves 308 low-severity outcomes out of 486, or 63.4\% (scene-clustered 95\% CI $[57.2, 69.5]$); AEB-only achieves 76/486, or 15.6\% (CI $[9.1, 22.6]$); MIND achieves 18/486, or 3.7\% (CI $[0.0, 8.6]$). The paired scene-clustered low-severity rate differences are 47.7 percentage points over AEB-only (95\% CI $[41.4,53.9]$) and 59.7 points over MIND (CI $[53.3,66.0]$). The corresponding zero-collision rates are 18.9\%, 2.7\%, and 0.0\%. Under the strict 650-frame accounting of Table~\ref{tab:five-system-safety}, which excludes the completion reruns, PA-LOI's evaluable-set rate is 61.7\% (227/368, CI $[54.4, 68.7]$) and AEB-only's is 15.8\%: the two accountings differ by under two points and give the same ordering, which is also why Tables~\ref{tab:main-safety} and~\ref{tab:five-system-safety} report slightly different values for the same stacks. PA-LOI therefore does not merely shift collision labels through the low-speed threshold; it also increases complete avoidance. At the same time, many remaining PA-LOI events are low-speed contacts, which is why low-severity outcome and zero-collision metrics are reported separately.
+
+The impact-speed metrics indicate a larger reduction in harm proxy. The all-task mean impact speed decreases from \SI{6.26}{m/s} for MIND and \SI{5.18}{m/s} for AEB-only to \SI{2.22}{m/s} for PA-LOI. The all-task velocity-squared proxy decreases from 41.33 and 30.99 to 7.81. When considering only tasks with nonzero ghost contact, hit-only impact speed decreases from \SI{6.26}{m/s} for MIND and \SI{5.33}{m/s} for AEB-only to \SI{2.75}{m/s} for PA-LOI.
+
+Fig.~\ref{fig:mechanism} makes the mechanism behind these aggregates visible on one representative clean81 scene (index 61, \SI{5.5}{m} trigger), rerun under the exact main-protocol settings with per-planning-cycle logging. All three stacks approach at \SI{9.7}{m/s}. MIND coasts to the conflict point and meets the injected pedestrian at \SI{7.9}{m/s}; AEB-only reacts only in the final metres and still arrives at \SI{6.8}{m/s}; PA-LOI activates the phantom source roughly \SI{35}{m} upstream, tracks its safe-speed bound down through the approach, and reaches the trigger distance at \SI{4.1}{m/s}---slow enough that the fallback converts the emergence into a full stop with no contact. The trigger fires at the same physical distance for all three stacks; what differs is the speed each stack has preserved when it arrives there.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/mechanism_case.pdf}
+  \caption{Mechanism on a representative clean81 scene (index 61, \SI{5.5}{m} trigger, instant-center): ego speed versus remaining distance to the conflict point, per planning cycle. The thin line under the PA-LOI trace is its active safe-speed bound~\eqref{eq:vsafe-impl} (shaded span: phantom source active); crosses mark ghost impact speeds; the dash-dotted line is the trigger distance.}
+  \label{fig:mechanism}
 \end{figure}
 
-\subsection{Comfort and Efficiency in False-Positive Scenarios}
-To verify that PA-LOI does not induce overly conservative behavior (e.g., phantom braking), we tested the system in an identical occluded scenario where no pedestrian emerges (a false-positive threat). The vehicle exhibited a smooth, defensive deceleration, reducing its speed from \SI{4.26}{\meter\per\second} to \SI{2.72}{\meter\per\second} while passing the occlusion.
+\input{tables/distance_safety.tex}
 
-The maximum deceleration requested by PA-LOI was only \SI{-1.09}{\meter\per\second\squared}, which falls well within the highly comfortable braking threshold and starkly contrasts with the \SI{-4.0}{\meter\per\second\squared} emergency braking applied by AEB. Furthermore, the overall delay introduced by this proactive deceleration was less than 1 second compared to the Vanilla baseline. This confirms that the approach significantly improves safety without compromising passenger comfort or substantially degrading traffic efficiency.
+Table~\ref{tab:distance-safety} breaks the safety results down by trigger distance. PA-LOI achieves 90.1\% low-severity outcome rate at \SI{5.5}{m} and \SI{5.0}{m}, then degrades as the pedestrian appears closer to the ego vehicle. This monotonic trend is consistent with the safe-speed boundary in~\eqref{eq:vsafe}: later triggering leaves less distance for proactive deceleration. AEB-only and MIND remain much lower across the entire range, indicating that the advantage is not limited to one favorable trigger setting.
 
-\subsection{Computational Efficiency}
-A key design objective of PA-LOI is minimal computational overhead, enabling deployment as a real-time plug-in module. We benchmarked the per-frame computation cost of the PA-LOI pipeline on an Apple M4 CPU (single-threaded, no GPU) with 20 surrounding agents:
+This pattern delimits the method's operating envelope: PA-LOI is not a safeguard for arbitrarily late emergence but a proactive margin-building mechanism whose benefit grows with the distance available before the conflict point---largest at \SIrange{5.0}{5.5}{m}, where a severe collision can still become avoidance or a low-speed contact, and smallest at \SI{3.0}{m}, where the only residual lever is raw approach speed.
 
-\begin{itemize}
-    \item \textbf{Risk source identification} (geometric filtering, tangent-point calculation, TTA state machine): \SI{0.35}{\milli\second}.
-    \item \textbf{Risk cost evaluation} (Mahalanobis distance over trajectory tree nodes): \SI{0.20}{\milli\second}.
-    \item \textbf{Total PA-LOI overhead}: \SI{0.55}{\milli\second} per planning frame.
-\end{itemize}
+Only three PA-LOI runs are marked with background collisions in the clean81 ghost table; they are retained in the aggregate (and counted as unsafe, per Section~IV-E) but reported separately to avoid hiding non-ghost events. AEB-only and MIND have no background-collision flags in the main ghost table, while MIND shows replay-collision problems in the no-ghost protocol---which is why the paper separates ghost-probe safety from general closed-loop stability.
 
-At a planning rate of \SI{10}{\hertz} (\SI{100}{\milli\second} budget), the PA-LOI module consumes only \textbf{0.5\%} of the available computation budget. This negligible overhead is achieved because PA-LOI operates entirely in closed-form geometric computations---no neural network inference, Monte Carlo sampling, or discrete agent instantiation is required. This confirms PA-LOI's suitability for real-time deployment on resource-constrained automotive platforms.
+\subsection{Comparison with Occlusion-Aware Baselines}
+\label{subsec:occ-baselines}
 
-\subsection{Ablation Study on Risk Weight ($w_{\text{risk}}$)}
-To rigorously evaluate the sensitivity of the system to its core hyper-parameters, we conducted an ablation study focusing on the risk field weight ($w_{\text{risk}}$) defined in Eq.~\eqref{eq:risk_cost}. As illustrated in Fig.~\ref{fig:ablation}, varying $w_{\text{risk}}$ governs the fundamental trade-off between vehicle safety (measured by impact velocity $v_{\text{imp}}$ prior to AEB engagement) and operational efficiency (measured by the time delay during a \emph{false-positive} pass-through). 
+\input{tables/five_system_safety.tex}
+\input{tables/five_system_matched.tex}
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\columnwidth]{figures/ablation.pdf}
-\caption{Ablation study on risk weight ($w_{\text{risk}}$). Increasing the weight decreases the resultant impact velocity (improving safety bounds) but exponentially penalizes normal traffic flow (pass-through delay).}
-\label{fig:ablation}
+Tables~\ref{tab:five-system-safety} and~\ref{tab:five-system-matched} place PA-LOI against the two re-implemented occlusion-aware baselines on the strict single 650-frame horizon. Because a sufficiently conservative supervisor can decelerate so early that the ego never reaches the conflict point within the horizon, the ghost is not always triggered. We therefore report a per-system \emph{spawn rate} as a first-class conservatism indicator and evaluate safety both on each system's own evaluable set (Table~\ref{tab:five-system-safety}; evaluable as defined in Section~IV-D) and on the matched subset of 195 cells from 34 scenes in which all five systems trigger (Table~\ref{tab:five-system-matched}). The all-task denominator of Table~\ref{tab:main-safety} is deliberately not used here: it would credit a baseline's failure to ever reach the conflict as a safe outcome.
+
+The set-based and shadow baselines are faithful, not strawman, implementations: relative to MIND and AEB-only they cut both collision rate and impact energy, lowering the evaluable-set velocity-squared proxy to 13.38 and 13.15 from 41.33 and 31.12. They obtain this safety by crawling, however: each triggers in only 43.0\% of cells against 87.7\% for PA-LOI, so the conflict never materializes in most of their scenes. On the 195 matched cells where all five systems trigger, PA-LOI attains the highest low-severity rate (58.5\%, CI $[48.0, 68.8]$, versus 34.4\% for Reachable-set, 34.9\% for Dynamic-shadow, 21.5\% for AEB-only, and 6.2\% for MIND) and the lowest impact-energy proxy (8.80, below 12.64 and 12.60 for the two occlusion-aware baselines). The paired low-severity differences are 24.1 percentage points over Reachable-set (scene-clustered 95\% CI $[8.4,38.9]$) and 23.6 points over Dynamic-shadow (CI $[7.8,38.4]$). Contact-speed directionality gives the same result: PA-LOI is lower in 128 cells versus 56 for Reachable-set (11 ties; exact two-sided sign test, $p=1.2\times10^{-7}$) and in 127 versus 56 against Dynamic-shadow ($p=1.6\times10^{-7}$); both remain below $10^{-6}$ after Bonferroni correction for the two planned comparisons. On cells where both stacks still collide, PA-LOI lowers the mean contact speed to \SI{2.96}{m/s}, from 3.58 and \SI{3.61}{m/s}. Its matched collision incidence (82.6\%) is nevertheless marginally higher than the crawling bounds' 80.0--81.0\% (Table~\ref{tab:five-system-matched}): on these near-unavoidable cells it reduces severity rather than avoiding more contacts. The knee claim is therefore specific: PA-LOI provides lower contact severity at comparable incidence on shared encounters, while avoiding the operational conservatism that suppresses most encounters under the strict supervisors.
+
+Three qualifications keep this comparison honest. First, the two baselines behave almost identically because both reduce a worst-case hidden pedestrian to the same stopping-feasibility speed bound; the dynamic-shadow frontier only changes the lateral distance fed into that bound, which rarely flips the binary outcome on these geometries. Second, the baselines are deliberately given none of PA-LOI's relaxations: the strict bound's defining property is that it never permits a speed from which stopping before the conflict is infeasible, and a crawl floor or comfort cap that overrides the bound would abandon exactly that guarantee. The comparison therefore contrasts a guarantee-preserving constraint mapping with a deliberately relaxed one---the design axis under study---under an instant-center injection that exceeds the shared \SI{2.0}{m/s} crossing assumption for every stack alike; how much conservatism a bounded relaxation of the published designs could recover is left to future work. Third, the per-distance breakdown reveals one regime in which PA-LOI does not dominate. At trigger distances of \SIrange{4.0}{5.5}{m} its matched low-severity rate (53.1\%--85.3\%) far exceeds the baselines' (34--44\%); at \SI{3.5}{m} the three tie at 29.0\%; but at \SI{3.0}{m} it reaches only 16.7\% against 26.7\% for both baselines, with a correspondingly higher impact-energy proxy. At three metres the encounter is near-unavoidable, the only residual lever is raw approach speed, and the always-crawling baselines retain a narrow edge. This exposes the intended relaxation tradeoff and marks the extreme-trigger regime in which a strict bound remains preferable; PA-LOI's advantage lies at the longer triggers, together with substantially higher operational throughput.
+
+\subsection{Clean21--New60 Consistency}
+
+\input{tables/split_consistency.tex}
+
+The clean81 benchmark combines the earlier clean21 set with a new60 extension. Table~\ref{tab:split-consistency} checks whether the result is dominated by the original scenes. PA-LOI obtains 63.5\% low-severity outcome rate on clean21 and 63.3\% on new60. AEB-only rises from 7.9\% to 18.3\%, while MIND rises from 0.0\% to 5.0\%, but both remain far below PA-LOI. This consistency supports clean81 as a unified evaluation set and functions as a held-out check against parameter overfitting: the deployed PA-LOI parameters are carried over unchanged from the conference-version system (Table~\ref{tab:paloi-parameters}) and thus predate the new60 mining, so the new60 column reports performance on scenes that could not have influenced any tuning.
+
+\subsection{No-Ghost Efficiency and Closed-Loop Stability}
+
+\input{tables/noghost_efficiency.tex}
+
+Table~\ref{tab:noghost-efficiency} summarizes no-ghost driving across all four stacks on the identical 81 scenes. PA-LOI reduces mean speed from \SI{6.19}{m/s} for MIND to \SI{4.52}{m/s}, a 27.0\% loss, and mean travel distance from \SI{55.14}{m} to \SI{40.60}{m}, a 26.4\% loss. This is the principal cost of the risk-aware policy, but it is far smaller than the cost paid by the occlusion-aware baselines: Reachable-set and Dynamic-shadow fall to \SI{3.14}{m/s} and \SI{3.15}{m/s}, a 49.2\% speed loss each (percentages computed from unrounded means). The frame-ratio columns show \emph{how} each system is slow: PA-LOI holds a moderated but moving pace (84.9\% of frames below \SI{6}{m/s} yet only 0.69\% below \SI{0.3}{m/s}), whereas the worst-case bounds spend roughly a third of their control frames nearly stopped (32.1\% and 32.4\%)---a strict bound enforces safety mainly by crawling. Closed-loop robustness follows the same ordering: MIND has four planner failures and 16 ground-truth replay collisions; Reachable-set and Dynamic-shadow remove the planner failures but still incur 11 replay collisions each, because heavy deceleration in dense replay traffic invites rear-end contacts from non-reactive background agents; PA-LOI removes all three failure modes at once, with zero planner failures, zero replay collisions, and all 81 horizons completed. Replay-collision differences among decelerating systems are instrument-conditional---reactive followers would brake for a slowing ego---so we read this row as evidence that PA-LOI's speed profile stays compatible with the logged traffic flow, not as a measured deployment-safety difference. The no-ghost result therefore shows a safety-efficiency tradeoff rather than a free performance gain, and Fig.~\ref{fig:tradeoff} places PA-LOI at the knee of that tradeoff.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/safety_efficiency_tradeoff.pdf}
+  \caption{Safety--efficiency tradeoff across the stacks with measured no-ghost efficiency. The horizontal axis is no-ghost mean-speed loss relative to MIND; the vertical axis is the matched-cell low-severity rate (the 195 cells where all five stacks trigger). PA-LOI sits at the knee: it has a much higher low-severity rate than MIND and is more efficient than the near-coincident Reachable-set and Dynamic-shadow bounds, which buy safety by crawling. AEB-only is omitted because it has no separate no-ghost run (Section~IV-F).}
+  \label{fig:tradeoff}
 \end{figure}
 
-A small weight ($w_{\text{risk}} < 0.5$) provides insufficient proactive deceleration, rendering the safety gain marginal. Conversely, an overly conservative weight ($w_{\text{risk}} > 2.0$) heavily penalizes the cost function, drastically reducing impact speed but inducing unacceptable traffic flow delays ($> \SI{1.8}{\second}$) in completely safe scenarios. A balanced scalar value near $1.0$ effectively minimizes kinetic energy without exceeding the $\sim \SI{1.0}{\second}$ comfort and efficiency threshold.
+\subsection{Pedestrian-Speed and Trigger-Distance Sensitivity}
+\label{subsec:speed-sensitivity}
 
-\subsection{Trade-Off Against SOTA Baselines}
-To further contextualize the value of this balanced approach, Fig.~\ref{fig:pareto} illustrates the safety vs. efficiency trade-off across all configurations at the critical \SI{4.3}{\meter} trigger distance. The Conservative WCA (surrogate RSS baseline) achieves absolute safety (zero impact velocity) but incurs an unsustainable pass-through delay penalty (over \SI{4.5}{\second}) as it forcefully brakes far before any hazard is confirmed. Vanilla and AEB Only configurations maximize efficiency (minimum delay) but fail catastrophically in safety. PA-LOI effectively isolates the Pareto-optimal frontier—securing the zero-collision safety of WCA while preserving 80\% of the uninterrupted baseline's traffic efficiency.
+\input{tables/speed_sensitivity.tex}
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\columnwidth]{figures/pareto_tradeoff.pdf}
-\caption{Safety vs. Efficiency trade-off. PA-LOI isolates a Pareto-optimal zone between the unsafe Reactive systems and the highly inefficient WCA (RSS surrogate) baseline.}
-\label{fig:pareto}
-\end{figure}
+Table~\ref{tab:speed-sensitivity} evaluates moving-pedestrian emergence, the realistic counterpart of the instant-center stress test. PA-LOI achieves 26/27 low-severity outcomes (96.3\%) at every tested walking speed; AEB-only ranges from 81.5\% at \SI{1.0}{m/s} down to 63.0\%, and MIND from 22.2\% down to 11.1\%. Zero-collision rates vary with pedestrian speed because slower pedestrians can meet the vehicle body at different locations and times, but the impact-speed proxy remains lowest for PA-LOI across all speeds. (The impact columns of Table~\ref{tab:speed-sensitivity} and Supplementary Table~S2 are hit-only means, unlike the all-task proxy of Table~\ref{tab:main-safety}, which counts collision-free runs as zero. The visible columns reconcile once ghost contacts recorded at zero speed and background-traffic collisions are counted.) The sensitivity study thus supports the main result: PA-LOI's advantage is not an artifact of the instant-center abstraction.
 
-% ============================================================
-% VI. Discussion
-% ============================================================
+Supplementary Table~S2 repeats the dash protocol at \SI{4.5}{m} and \SI{3.5}{m} triggers. The ordering is unchanged in every distance--speed cell: PA-LOI stays at 92.6--96.3\% low-severity, AEB-only falls from 77.8\% to 37.0\%, and MIND remains between 11.1\% and 22.2\%. At \SI{3.5}{m}, full avoidance nearly disappears and the advantage is mainly severity reduction. This trend agrees with Table~\ref{tab:distance-safety}: preserved approach-speed margin matters most when little distance remains.
+
+\subsection{Risk-Layer Parameter Sensitivity}
+\label{subsec:param-sensitivity}
+
+Supplementary Table~S3 asks whether the deployed operating point of Table~\ref{tab:paloi-parameters} is a knife-edge tuned to clean81. All six one-dimensional perturbations keep the all-cell low-severity rate within 81.5--94.4\% (deployed: 92.6\%). Raising $\eta$ trades safety for speed ($\eta{=}0.8$: $+0.10$\,m/s, $-5.6$\,pp paired low-severity), while weakening the activation weight degrades most ($w_{\max}{=}15$: $-11.1$\,pp paired low-severity and zero collision). Per-scene directionality is not strict, so we claim mean-level trends only. On paired spawned cells no variant improves on the deployed point by more than one cell. Across these 27 scenes, perturbations move the no-ghost speed loss from 28.1\% to 33.6\%, making efficiency a tunable operating point rather than a fixed tax.
+
+One candidate deserves scrutiny rather than silence: $v_{\mathrm{floor}}{=}3.0$ is that one-cell exception ($+2.0$\,pp paired low-severity and zero collision, 2.3\% faster). It is not adopted for two auditable reasons. First, a \SI{3.0}{m/s} crawl floor equals the low-severity threshold itself, so any contact during floored creep sits on the severity boundary with zero margin; the deployed \SI{2.0}{m/s} floor keeps a \SI{1.0}{m/s} margin. Second, every perturbation, in either direction, introduces replay collisions on the 27 no-ghost scenes (1--4 runs each, plus one planner failure at $w_{\max}{=}15$), while the deployed point is the only setting with zero planner failures and zero replay collisions. Margin and stability, not aggregate luck on 54 cells, fix the operating point.
+
+\subsection{Failure-Mode Accounting}
+
+Collapsing the four failure modes---high-impact ghost collision, low-speed ghost contact, background-traffic collision, and planning infeasibility---into one ``failed'' label would obscure whether PA-LOI improves pedestrian safety, closed-loop feasibility, or both. Kept separate, the pattern is clean: in the ghost-probe protocol PA-LOI mainly converts high-speed impacts into low-speed contacts or full avoidance, and in the no-ghost protocol it removes MIND's planner failures and replay collisions. Both effects flow from the same speed regulation but are evaluated separately: PA-LOI is a risk-aware speed-bound layer, not a planner replacement.
+
 \section{Discussion}
 
-\subsection{Why Proactive Speed Reduction Matters}
-The experimental results reveal a fundamental limitation of reactive AEB: its effectiveness is bounded by the vehicle's kinetic energy at the moment of first detection. In occluded scenarios, the detection-to-collision window is inherently short, making the \emph{approach speed} the decisive factor. PA-LOI addresses this by treating the approach speed itself as a controllable variable, rather than accepting it as a given input to the AEB system.
+\subsection{Bounded-Rational Interpretation}
 
-\subsection{Relationship to Euro NCAP Standards}
-Our ghost probe scenario closely mirrors the Euro NCAP CPNA test protocol. The key distinction is that CPNA tests typically use a fixed vehicle speed (e.g., \SI{40}{\kilo\meter\per\hour}), while our scenario allows the planner to determine its own speed profile. This makes the speed at the point of emergence a function of the planning algorithm, which is precisely the variable PA-LOI optimizes.
+The bounded-rational framing changes the interpretation of ghost-probe risk. The hidden pedestrian is not treated as a perfectly rational agent or a purely random disturbance, but as a member of $\Pi_{\mathrm{BR}}$: a plausible local actor with occlusion-limited information, an unknown satisficing threshold, and bounded speed and reaction capability~\cite{rasouli2020survey,oxley2005crossing,dang2025bounded}. Planning against this capability envelope rather than an estimated intention lets PA-LOI act before any pedestrian observation exists. It also explains why the two reference stacks fail differently: AEB-only waits until the conflict is imminent and can only blunt the impact, while pure MIND plans over visible interactions and preserves speed near the occluder---the same behavior that produces its planner infeasibilities and replay collisions in no-ghost scenes. The phantom source and safe-speed boundary thus form a compact scene-level risk primitive for CPSS, parallel-driving, and virtual--real closed-loop platforms~\cite{wang2010parallel,wang2017parallel,wang2024parallel}.
 
-\subsection{Limitations and Future Work}
-While our evaluation covers two geometrically distinct scenarios---a complex intersection and a straight road with dense parked vehicles---additional topologies (e.g., curved roads, multi-lane highways, or T-junctions) remain to be studied. The current risk field relies on map-based geometric occlusion analysis; integrating real-time sensor-based occlusion estimation (e.g., from LiDAR shadow analysis) would improve applicability to unknown environments.
+\subsection{Safety Threshold Versus Zero Collision}
 
-Furthermore, subsequent research will involve integrating PA-LOI with probabilistic tracking modules to evaluate its end-to-end performance in real-world, noisy perception environments and to quantify its impact on large-scale traffic efficiency metrics.
+The \SI{3.0}{m/s} low-severity threshold separates high-impact failures from low-speed contacts; it does not claim that low-speed contact is collision-free. Converting severe impacts into low-speed contacts matters because impact speed is closely tied to pedestrian injury severity~\cite{rosen2009fatality}, but it is not full avoidance, so zero collision is always reported separately, with the velocity-squared proxy as a complementary harm measure~\cite{westhofen2023criticality}. Because the crawl floor is deliberately set below the reporting threshold (Section~III-D), we also verified that the ranking is not an artifact of that co-design: recomputing the all-task low-severity rate at \SIlist{2.0;2.5;3.5}{m/s} gives 44.9\%, 52.9\%, and 74.1\% for PA-LOI against 11.1\%, 12.8\%, and 18.1\% for AEB-only and 0.6\%, 2.1\%, and 6.6\% for MIND, and the impact-speed and velocity-squared metrics are threshold-free.
 
-% ============================================================
-% VII. Conclusion
-% ============================================================
+\subsection{Implications for Benchmark Design}
+
+The experiments also suggest benchmark-design lessons: occlusion benchmarks should store hidden-agent geometry explicitly, separate zero collision from low-speed contact, pair no-ghost efficiency with ghost-probe safety, and report replay-traffic collisions and planning infeasibility separately, keeping scenario definition and metric semantics stable across methods~\cite{althoff2017commonroad,karnchanachari2024nuplan,westhofen2023criticality}.
+
+\section{Limitations and Future Work}
+
+We state the scope of our claims precisely so that evidence and conclusion match: the contribution is a reproducible occluded-pedestrian benchmark and an auditable proactive safety layer with a characterized safety--efficiency tradeoff, not an on-vehicle deployment claim. Five boundaries follow. First, AV2 replay is non-interactive: background agents do not adapt to ego behavior---the deliberate cost of holding the hazard fixed across systems (Section~IV)---so replay-collision differences among slow-driving systems are instrument-conditional (Section~V-D). Second, clean81 is curated for occluded ghost-probe relevance and is not a naturalistic frequency estimate; it characterizes the corner case, not its prevalence. Likewise, $\Pi_{\mathrm{BR}}$ is a planning uncertainty class, not a behaviorally calibrated pedestrian model. Supplementary Table~S4 keeps all 88 log-complete candidates to quantify the curation effect. Third, the \SI{3.0}{m/s} threshold is a reporting boundary tied to injury-risk evidence~\cite{rosen2009fatality}, not a certified injury model; zero collision and impact energy are always reported beside it. Fourth, pedestrian injection is simulated and bracketed rather than exhaustive: instant-center is an outer stress envelope; the moving protocol covers four walking speeds on 27 scenes at \SI{5.5}{m} and three at \SIlist{4.5;3.5}{m}, leaving \SI{3.0}{m} untested; and parameter interactions are not explored. Fifth, the head-to-head covers the two occlusion-aware families that port to a supervisory layer; deeper belief-space, contingency-MPC, and visibility-maximization planners are positioned qualitatively (Supplementary Table~S1), the baselines are per-step ports rather than the original authors' full stacks, and the walking protocols cover only the three primary stacks. Within this scope, the central result is specific: on identical hazards that every system reaches, PA-LOI reduces contact severity at comparable incidence, while its relaxed mapping reaches the conflict roughly twice as often as the strict bounds. The ordering holds under both horizon accountings and across reporting thresholds from \SIrange{2.0}{3.5}{m/s}.
+
+Future work should use interactive simulators so surrounding agents adapt to PA-LOI and deeper belief-space or contingency planners can be compared~\cite{dosovitskiy2017carla,karnchanachari2024nuplan,althoff2017commonroad,zhang2021pomdp,zheng2026occlusioncontingency}. Scene-conditioned calibration of $w_{\max}$, $\eta$, and $v_{\mathrm{floor}}$ may reduce the no-ghost cost. Deployment studies should replace true geometry with lidar free-space or visibility-grid estimates, progress through hardware-in-the-loop, closed-course, and shadow-mode tests, and measure perception delay, braking response, comfort, and acceptance.
+
 \section{Conclusion}
 
-We presented PA-LOI, a proactive occlusion-aware planning framework that complements reactive AEB systems for pedestrian collision avoidance in ghost probe scenarios. By constructing phantom risk fields around occluded regions and integrating them into trajectory optimization, PA-LOI reduces the ego vehicle's approach speed, thereby extending the effective braking window available to AEB.
+PA-LOI converts occlusion geometry into a phantom source, safe-speed boundary, and velocity-aware planning cost before AEB becomes the only remaining response. Clean81 evaluates this mechanism with fixed hazards, severity-graded metrics, spawn-rate accounting, and 4050 closed-loop runs. PA-LOI improves every severity metric over AEB-only and MIND; on matched triggers it raises low-severity outcomes by 23.6--24.1 percentage points over the re-implemented reachability and shadow bounds while triggering roughly twice as often. Its cost is a 27.0\% mean-speed loss in no-ghost driving. The ordering persists in the unfiltered 88-candidate audit, under walking-speed emergence down to \SI{3.5}{m}, and under all six parameter perturbations. The evidence therefore supports a specific conclusion: PA-LOI reduces severity at substantially lower conservatism than the strict bounds within this closed-loop instrument.
 
-Experimental evaluation on two distinct scenarios---a complex intersection and a straight road with dense parked vehicles---demonstrated consistent safety improvements. In the intersection scenario, PA-LOI + AEB achieves zero collision from \SI{2.05}{\meter} clearance versus \SI{3.25}{\meter} for AEB alone (37\% improvement). In the high-speed straight road scenario, AEB alone fails at all tested distances, while PA-LOI + AEB achieves zero collision from just \SI{1.75}{\meter} and reduces worst-case impact velocity by 71\%. These results confirm that proactive, upstream speed management is a critical complement to reactive safety systems in urban autonomous driving.
+\section*{Acknowledgment}
+Generative AI tools (Anthropic Claude and OpenAI Codex) assisted with language editing and refactoring analysis/reproducibility scripts; they generated no data or scientific conclusions. The authors verified all analyses and results and take full responsibility.
 
-Future work will extend PA-LOI to additional road topologies, integrate it with sensor-based occlusion estimation~\cite{blindspot2024,occtrack2025}, and evaluate large-scale traffic efficiency impacts.
+\section*{Data and Code Availability}
 
-% ============================================================
-% References
-% ============================================================
+An accompanying reproducibility archive contains the clean81 and candidate-pool injection geometry (JSONL), AV2 scenario identifiers, per-run records behind every table and figure, the PA-LOI and two supervisor implementations, and the aggregation, validation, and statistical-analysis scripts, with SHA-256 checksums. The archive will also be released at \url{https://github.com/phy17/MIND-PA-LOI}. Raw AV2 data are not redistributed; they are available from the official Argoverse release, and the records reference scenarios by identifier.
+
 \bibliographystyle{IEEEtran}
 \bibliography{references}
+
+\begin{IEEEbiographynophoto}{Hongyu Peng}
+is currently a graduate student with the School of Electrical Engineering and Automation, Anhui University, Hefei, China. His research interests include occlusion-aware planning and closed-loop safety evaluation.
+\end{IEEEbiographynophoto}
+
+\begin{IEEEbiographynophoto}{Shangqi Zhang}
+is with the School of Computer Science and Technology, Anhui University, Hefei, China. His research interests include trajectory prediction and learning-based planning.
+\end{IEEEbiographynophoto}
+
+\begin{IEEEbiographynophoto}{Bo Chen}
+is with Anhui Jianghuai Automobile Group Corp., Ltd., Hefei, China. His research interests include advanced driver-assistance systems, automatic emergency braking, and vulnerable-road-user protection.
+\end{IEEEbiographynophoto}
+
+\begin{IEEEbiographynophoto}{Xiao Wang}
+received the B.S. degree in network engineering from Dalian University of Technology, Dalian, China, in 2011, and the Ph.D. degree from the Institute of Automation, Chinese Academy of Sciences, Beijing, China, in 2016. She is currently a Professor with the Institute of Embodied Intelligence, Anhui University, Hefei, China. Her research interests include parallel driving, cyber--physical--social systems, and embodied intelligence.
+\end{IEEEbiographynophoto}
 
 \end{document}

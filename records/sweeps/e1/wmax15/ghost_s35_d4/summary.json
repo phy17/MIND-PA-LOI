@@ -1,0 +1,65 @@
+[
+  {
+    "scene_label": "scene_13b0afee",
+    "seq_id": "13b0afee-a293-4ff1-9750-a2b965da547f",
+    "output_dir": "sweep_results/e1/wmax15/ghost_s35_d4/scene_13b0afee_13b0afee_ours",
+    "video_path": "sweep_results/e1/wmax15/ghost_s35_d4/scene_13b0afee_13b0afee_ours/13b0afee-a293-4ff1-9750-a2b965da547f_ours_wmax15_d4_ic.mov",
+    "overview_png": null,
+    "baseline": "ours",
+    "enable_ghost_probe": true,
+    "enable_aeb": true,
+    "baseline_mode": null,
+    "ghost_spawned": true,
+    "ghost_spawn_mode": "instant_center",
+    "collision_count": 1,
+    "collision_log": [
+      {
+        "timestamp": 12.799999999999816,
+        "frame_idx": 640,
+        "ego_state": [
+          3444.7456576092286,
+          1446.1255527343642,
+          0.477808222978485,
+          1.5136479786427715
+        ],
+        "ego_vel": 0.477808222978485,
+        "other_id": "GHOST_001",
+        "other_type": "ObjectType.PEDESTRIAN",
+        "other_state": [
+          3444.712890625,
+          1448.7569580078125,
+          0.0,
+          3.116854190826416
+        ],
+        "collision_msg": "Collision with pedestrian ID:GHOST_001"
+      }
+    ],
+    "first_collision": {
+      "timestamp": 12.799999999999816,
+      "frame_idx": 640,
+      "ego_state": [
+        3444.7456576092286,
+        1446.1255527343642,
+        0.477808222978485,
+        1.5136479786427715
+      ],
+      "ego_vel": 0.477808222978485,
+      "other_id": "GHOST_001",
+      "other_type": "ObjectType.PEDESTRIAN",
+      "other_state": [
+        3444.712890625,
+        1448.7569580078125,
+        0.0,
+        3.116854190826416
+      ],
+      "collision_msg": "Collision with pedestrian ID:GHOST_001"
+    },
+    "trigger_distance_m": 4.0,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": 10.69999999999986,
+    "pedestrian_speed_ms": 2.0,
+    "elapsed_s": 1706.1
+  }
+]

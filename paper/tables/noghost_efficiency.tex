@@ -1,0 +1,19 @@
+\begin{table*}[t]
+\caption{No-Ghost Efficiency and Closed-Loop Stability on Clean81 (324 Runs)}
+\label{tab:noghost-efficiency}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lcccccccc}
+\toprule
+Method & Tasks & \makecell{Mean speed\\(m/s)} & \makecell{Distance\\(m)} & \makecell{Frames\\$<6$\,m/s} & \makecell{Frames\\$<0.3$\,m/s} & \makecell{Planner\\failures} & \makecell{Replay\\collisions} & \makecell{Full\\horizon} \\
+\midrule
+MIND & 81 & 6.19 & 55.14 & 39.7\% & 0.35\% & 4 & 16 & 77 \\
+Reachable-set & 81 & 3.14 & 28.28 & 77.2\% & 32.15\% & 0 & 11 & 81 \\
+Dynamic-shadow & 81 & 3.15 & 28.30 & 76.9\% & 32.38\% & 0 & 11 & 81 \\
+PA-LOI + AEB & 81 & 4.52 & 40.60 & 84.9\% & 0.69\% & 0 & 0 & 81 \\
+\bottomrule
+\end{tabular}
+
+\vspace{3pt}{\scriptsize Speed loss relative to MIND: PA-LOI 27.0\%, Reachable-set 49.2\%, Dynamic-shadow 49.2\%.}
+\end{table*}

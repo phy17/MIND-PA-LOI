@@ -1,0 +1,28 @@
+\begin{table*}[!ht]
+\caption{Moving-Pedestrian Emergence at Extended Trigger Distances (27 Scenes, 800 Frames). $v_{\mathrm{imp}}^2$ Columns Are Hit-Only Means, as in the Main-Paper Pedestrian-Speed Table. Best Low-Severity and Impact-Energy Values per Distance--Speed Cell in Bold.}
+\label{tab:extended-distance}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{clcccccc}
+\toprule
+ & & \multicolumn{3}{c}{$d_{\mathrm{trig}}=\SI{4.5}{m}$} & \multicolumn{3}{c}{$d_{\mathrm{trig}}=\SI{3.5}{m}$} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+\makecell{Speed\\(m/s)} & Method & Low-severity & Zero coll. & \makecell{Mean $v_{\mathrm{imp}}^2$\\(m$^2$/s$^2$)} & Low-severity & Zero coll. & \makecell{Mean $v_{\mathrm{imp}}^2$\\(m$^2$/s$^2$)} \\
+\midrule
+\multirow{3}{*}{1.0} & PA-LOI + AEB & \textbf{26/27 (96.3\%)} & 2/27 (7.4\%) & \textbf{1.00} & \textbf{26/27 (96.3\%)} & 0/27 (0.0\%) & \textbf{0.67} \\
+ & AEB-only & 21/27 (77.8\%) & 1/27 (3.7\%) & 4.36 & 20/27 (74.1\%) & 0/27 (0.0\%) & 4.83 \\
+ & MIND & 5/27 (18.5\%) & 4/27 (14.8\%) & 25.41 & 6/27 (22.2\%) & 5/27 (18.5\%) & 25.01 \\
+\midrule
+\multirow{3}{*}{2.0} & PA-LOI + AEB & \textbf{26/27 (96.3\%)} & 5/27 (18.5\%) & \textbf{2.78} & \textbf{26/27 (96.3\%)} & 0/27 (0.0\%) & \textbf{3.01} \\
+ & AEB-only & 14/27 (51.9\%) & 1/27 (3.7\%) & 11.95 & 13/27 (48.1\%) & 1/27 (3.7\%) & 12.81 \\
+ & MIND & 3/27 (11.1\%) & 0/27 (0.0\%) & 28.05 & 3/27 (11.1\%) & 0/27 (0.0\%) & 27.25 \\
+\midrule
+\multirow{3}{*}{3.0} & PA-LOI + AEB & \textbf{26/27 (96.3\%)} & 4/27 (14.8\%) & \textbf{3.15} & \textbf{25/27 (92.6\%)} & 0/27 (0.0\%) & \textbf{4.80} \\
+ & AEB-only & 12/27 (44.4\%) & 1/27 (3.7\%) & 15.18 & 10/27 (37.0\%) & 0/27 (0.0\%) & 16.41 \\
+ & MIND & 3/27 (11.1\%) & 0/27 (0.0\%) & 27.81 & 4/27 (14.8\%) & 0/27 (0.0\%) & 27.40 \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}{\scriptsize In one scene AEB-only hits replay background traffic before the trigger in all six cells (counted unsafe); excluding that scene for all stacks changes no rate by more than 3.1\,pp and no ordering.}
+\end{table*}

@@ -1,0 +1,65 @@
+[
+  {
+    "scene_label": "scene_ad8fbb5d",
+    "seq_id": "ad8fbb5d-56e8-4c54-867c-f7d51d660060",
+    "output_dir": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene64_ad8fbb5d_d5p5_shadow/scene_ad8fbb5d_ad8fbb5d_shadow",
+    "video_path": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene64_ad8fbb5d_d5p5_shadow/scene_ad8fbb5d_ad8fbb5d_shadow/ad8fbb5d-56e8-4c54-867c-f7d51d660060_shadow_d5p5_instant_center.mov",
+    "overview_png": null,
+    "baseline": "shadow",
+    "enable_ghost_probe": false,
+    "enable_aeb": true,
+    "baseline_mode": "shadow",
+    "ghost_spawned": true,
+    "ghost_spawn_mode": "instant_center",
+    "collision_count": 1,
+    "collision_log": [
+      {
+        "timestamp": 10.179999999999872,
+        "frame_idx": 509,
+        "ego_state": [
+          3142.98806324992,
+          1526.0299085500112,
+          2.794323553919706,
+          3.126102666987546
+        ],
+        "ego_vel": 2.794323553919706,
+        "other_id": "GHOST_001",
+        "other_type": "ObjectType.PEDESTRIAN",
+        "other_state": [
+          3140.375,
+          1526.125,
+          0.0,
+          -1.5891363620758057
+        ],
+        "collision_msg": "Collision with pedestrian ID:GHOST_001"
+      }
+    ],
+    "first_collision": {
+      "timestamp": 10.179999999999872,
+      "frame_idx": 509,
+      "ego_state": [
+        3142.98806324992,
+        1526.0299085500112,
+        2.794323553919706,
+        3.126102666987546
+      ],
+      "ego_vel": 2.794323553919706,
+      "other_id": "GHOST_001",
+      "other_type": "ObjectType.PEDESTRIAN",
+      "other_state": [
+        3140.375,
+        1526.125,
+        0.0,
+        -1.5891363620758057
+      ],
+      "collision_msg": "Collision with pedestrian ID:GHOST_001"
+    },
+    "trigger_distance_m": 5.5,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": 9.499999999999886,
+    "pedestrian_speed_ms": 2.0,
+    "elapsed_s": 1414.2
+  }
+]

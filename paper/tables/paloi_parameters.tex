@@ -1,0 +1,48 @@
+\begin{table}[t]
+\caption{Deployed PA-LOI and Fallback Parameters Used in All Experiments}
+\label{tab:paloi-parameters}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{llc}
+\toprule
+Group & Parameter & Value \\
+\midrule
+\multirow{4}{*}{\makecell[l]{Occlusion\\screening}}
+ & Static-occluder speed bound & \SI{0.5}{m/s} \\
+ & Longitudinal window & \SIrange{-5}{50}{m} \\
+ & Lateral perception bound $d_{\mathrm{outer}}$ & $\min(7.0, w_{\mathrm{road}}/2)$\,m \\
+ & Target-lane gate & $w_{\mathrm{lane}}/2 + \SI{4.5}{m}$ \\
+\midrule
+\multirow{4}{*}{\makecell[l]{Phantom\\potential~\eqref{eq:phantom}}}
+ & Gate steepness $k$ & \SI{2.0}{m^{-1}} \\
+ & Ego half width $w_e/2$ & \SI{1.0}{m} \\
+ & Activation horizon $T_{\mathrm{far}}$ / $T_{\mathrm{near}}$ & \SI{6.5}{s} / \SI{2.0}{s} \\
+ & Saturated weight $w_{\max}$ & 25 \\
+\midrule
+\multirow{5}{*}{\makecell[l]{Safe speed~\eqref{eq:vsafe-impl}}}
+ & Braking authority $a_b$ & \SI{4.0}{m/s^2} \\
+ & Nominal crossing speed $v_{\mathrm{ped}}$ & \SI{2.0}{m/s} \\
+ & Comfort factor $\eta$ & 0.6 \\
+ & Crawl floor $v_{\mathrm{floor}}$ & \SI{2.0}{m/s} \\
+ & Strict bound~\eqref{eq:vsafe} $\tau_r$ / $\delta$ (baselines) & \SI{0.2}{s} / \SI{0.5}{m} \\
+\midrule
+\multirow{2}{*}{\makecell[l]{Bounded-rational\\class $\Pi_{\mathrm{BR}}$}}
+ & Sprint bound $v_{\max}$ & \SI{5.0}{m/s} \\
+ & Benchmark lateral cap $d_\perp$ & $\le$\,\SI{3.0}{m} \\
+\midrule
+\multirow{6}{*}{\makecell[l]{AEB fallback}}
+ & TTC warn / danger / critical & 2.6 / 1.6 / \SI{1.4}{s} \\
+ & RSS $\tau_{\mathrm{rsp}}$, $a_{\max}$, $d_{\min}$~\eqref{eq:rss} & \SI{0.2}{s}, \SI{4.0}{m/s^2}, \SI{2.0}{m} \\
+ & Search range & $\max(1.5\,d_{\mathrm{rss}}, \SI{15}{m})$ \\
+ & Lateral gate (static / vehicle / ped.) & 1.2 / 1.5 / \SI{5.0}{m} \\
+ & Latched brake command & \SI{-4.0}{m/s^2} \\
+ & Hysteresis (downgrade frames) & 3 \\
+\midrule
+\multirow{3}{*}{\makecell[l]{Timing}}
+ & Simulation / perception / planning & 50 / 10 / \SI{5}{Hz} \\
+ & Clamp step $\Delta t$ & \SI{0.2}{s} \\
+ & Closed-loop horizon & \makecell{650 frames\\(800 in completion reruns)} \\
+\bottomrule
+\end{tabular}
+\end{table}

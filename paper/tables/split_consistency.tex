@@ -1,0 +1,20 @@
+\begin{table}[t]
+\caption{Clean21--New60 Consistency Check. Best Low-Severity Rates per Split in Bold.}
+\label{tab:split-consistency}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{llccc}
+\toprule
+Split & Method & Low-severity & Zero collision & \makecell{Mean $v_{\mathrm{imp}}$\\(m/s)} \\
+\midrule
+\multirow{3}{*}{clean21} & PA-LOI + AEB & \textbf{80/126 (63.5\%)} & 26/126 (20.6\%) & 2.17 \\
+ & AEB-only & 10/126 (7.9\%) & 1/126 (0.8\%) & 5.41 \\
+ & MIND & 0/126 (0.0\%) & 0/126 (0.0\%) & 6.41 \\
+\midrule
+\multirow{3}{*}{new60} & PA-LOI + AEB & \textbf{228/360 (63.3\%)} & 66/360 (18.3\%) & 2.23 \\
+ & AEB-only & 66/360 (18.3\%) & 12/360 (3.3\%) & 5.10 \\
+ & MIND & 18/360 (5.0\%) & 0/360 (0.0\%) & 6.21 \\
+\bottomrule
+\end{tabular}
+\end{table}

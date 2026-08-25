@@ -1,64 +1,76 @@
-<div align="center">
-    <h2>MIND: <ins>M</ins>ulti-modal <ins>I</ins>ntegrated Predictio<ins>N</ins> and <ins>D</ins>ecision-making with Adaptive Interaction Modality Explorations</h2>
-    <br>
-        <a href="https://uav.hkust.edu.hk/current-members/" target="_blank">Tong Li</a><sup>*†</sup>,
-        <a href="https://masterizumi.github.io/" target="_blank">Lu Zhang</a><sup>*</sup>,
-        <a href="https://github.com/sikang" target="_blank">Sikang Liu</a>,
-        <a href="https://uav.hkust.edu.hk/group/" target="_blank">Shaojie Shen</a>
-    <p>
-        <h45>
-            HKUST Aerial Robotics Group &nbsp;&nbsp;
-            <br>
-        </h5>
-        <sup>*</sup>Equal Contributions
-        <sup>†</sup>Corresponding Author
-    </p>
-    <a href='https://arxiv.org/pdf/2408.13742'><img src='https://img.shields.io/badge/arXiv-MIND-red' alt='arxiv'></a>
-    <a href='https://www.youtube.com/watch?v=Bwlb5Dz2OZQ'><img src='https://img.shields.io/badge/Video-MIND-blue' alt='youtube'></a>
-</div>
+# PA-LOI: A Proactive Risk Layer for Occluded Pedestrian Emergence
 
-## 📃 Abstract
-Navigating dense and dynamic environments poses a significant challenge for autonomous driving systems, owing to the intricate nature of multimodal interaction, wherein the actions of various traffic participants and the autonomous vehicle are complex and implicitly coupled. In this paper, we propose a novel framework, Multi-modal Integrated predictioN and Decision-making (MIND), which addresses the challenges by efficiently generating joint predictions and decisions covering multiple distinctive interaction modalities. Specifically, MIND leverages learning-based scenario predictions to obtain integrated predictions and decisions with social-consistent interaction modality and utilizes a modality-aware dynamic branching mechanism to generate scenario trees that efficiently capture the evolutions of distinctive interaction modalities with low variation of interaction uncertainty along the planning horizon. The scenario trees are seamlessly utilized by the contingency planning under interaction uncertainty to obtain clear and considerate maneuvers accounting for multi-modal evolutions. Comprehensive experimental results in the closed-loop simulation based on the real-world driving dataset showcase superior performance to other strong baselines under various driving contexts.
+[![Reproducibility archive](https://img.shields.io/badge/artifacts-checksummed-2ea44f)](MANIFEST.tsv)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-<div align="center">
-  <img src="misc/overview.png" alt="system overview" />
-</div>
+This repository contains the code, fixed hazard geometry, per-run records, and
+analysis scripts accompanying the manuscript **PA-LOI: A Proactive Risk Layer
+for Occluded Pedestrian Emergence**.
 
+PA-LOI adds an occlusion-aware velocity cost to the optimization stage of MIND
+while preserving MIND's predictor and scenario-tree generator. The associated
+**clean81** benchmark fixes hidden-pedestrian geometry across systems and reports
+hazard spawn rate, contact severity, zero collision, replay collisions, planner
+failures, and no-pedestrian efficiency separately.
 
+## What is included
 
-## 🔎 Quantitative Comparison of AIME
-<p align="center">
-  <img src="misc/aime_quan.png"/>
-</p>
+- 4,050 archived closed-loop runs across five systems and sensitivity studies.
+- JSONL-fixed geometry for clean81 and the all-candidate curation audit.
+- PA-LOI, AEB, Reachable-set, and Dynamic-shadow supervisory implementations.
+- Every aggregation, validation, statistics, and figure-generation script used
+  for the manuscript results.
+- A SHA-256 manifest and an archive-to-workspace restore map.
+- The manuscript and supplementary PDF, plus their LaTeX sources.
 
-## 🔎 Qualitative Results On Argoverse 2
-<p align="center">
-  <img src="misc/av2_sim_1.gif" width = "200"/>
-  <img src="misc/av2_sim_2.gif" width = "200"/>
-  <img src="misc/av2_sim_3.gif" width = "200"/>
-  <img src="misc/av2_sim_4.gif" width = "200"/>
-</p>
+The study is a controlled AV2 replay evaluation. It does not make an on-road
+deployment or calibrated pedestrian-behavior claim.
 
-## 🛠️ Getting started
-### Create a new conda virtual environment
-```
-conda create -n mind python=3.10
-conda activate mind
+## Fast audit from archived records
+
+The aggregate tables can be regenerated without rerunning the planner. From the
+repository root:
+
+```bash
+python3 verify_archive.py
+python3 restore_workspace.py --destination restored_workspace
+cd restored_workspace
+python3 paper/tits_pa_loi/scripts/generate_sweep_tables.py
+python3 paper/tits_pa_loi/scripts/compute_statistics.py
+python3 paper/tits_pa_loi/scripts/compute_param_paired_stats.py
+python3 paper/tits_pa_loi/scripts/compute_candidate_pool_audit.py
 ```
 
-### Install dependencies
-```
-pip install -r requirements.txt 
-```
+The scripts require Python 3.10 and the numerical packages listed in
+`code/requirements.txt`. New closed-loop runs additionally require the official
+Argoverse 2 scenario files and the upstream MIND runtime/model weights. Raw AV2
+data and the 50 MB checkpoint are not redistributed; scenario identifiers and
+the exact checkpoint digest are included.
 
-## 🕹️ Run a closed-loop simulation
-```
-python run_sim.py --config configs/demo_{1,2,3,4}.json
-```
-- The whole simulation takes about 10 minutes to finish.
-You are supposed to get the rendered simulation results saved in the outputs folder.
-##  ❤️ Acknowledgment
-We would like to express sincere thanks to the authors of the following packages and tools:
-- [SIMPL](https://github.com/HKUST-Aerial-Robotics/SIMPL)
-- [ILQR](https://github.com/anassinator/ilqr)
+## Repository layout
 
+- `geometry/` — fixed hazard geometry and candidate sets.
+- `records/` — per-run records for primary, baseline, sweep, mechanism, and
+  curation-audit analyses.
+- `code/` — implementations, experiment drivers, configurations, and analyses.
+- `paper/` — manuscript/supplement PDFs and LaTeX source.
+- `MANIFEST.tsv` — byte size and SHA-256 for every archived file.
+- `RESTORE_MAP.tsv` / `restore_workspace.py` — restore paths expected by scripts.
+- `MODEL_CHECKPOINT.sha256` — exact upstream checkpoint identifier.
+
+## Upstream project and data
+
+PA-LOI is implemented on top of
+[MIND](https://github.com/HKUST-Aerial-Robotics/MIND). Argoverse 2 data are
+available from the [official Argoverse release](https://www.argoverse.org/av2.html).
+Please follow the upstream projects' terms when obtaining their assets.
+
+## Citation
+
+Citation metadata are provided in [`CITATION.cff`](CITATION.cff). Please cite the
+manuscript and acknowledge MIND and Argoverse 2 when using these artifacts.
+
+## License
+
+The released code is provided under GPL-3.0; see [`LICENSE`](LICENSE). Dataset
+files remain subject to the Argoverse terms.

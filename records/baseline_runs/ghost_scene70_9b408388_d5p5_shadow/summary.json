@@ -1,0 +1,65 @@
+[
+  {
+    "scene_label": "scene_9b408388",
+    "seq_id": "9b408388-85af-411f-8770-3013410a1cf0",
+    "output_dir": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene70_9b408388_d5p5_shadow/scene_9b408388_9b408388_shadow",
+    "video_path": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene70_9b408388_d5p5_shadow/scene_9b408388_9b408388_shadow/9b408388-85af-411f-8770-3013410a1cf0_shadow_d5p5_instant_center.mov",
+    "overview_png": null,
+    "baseline": "shadow",
+    "enable_ghost_probe": false,
+    "enable_aeb": true,
+    "baseline_mode": "shadow",
+    "ghost_spawned": true,
+    "ghost_spawn_mode": "instant_center",
+    "collision_count": 1,
+    "collision_log": [
+      {
+        "timestamp": 10.199999999999871,
+        "frame_idx": 510,
+        "ego_state": [
+          -1041.471348637373,
+          2081.9080591023744,
+          0.03529575785618003,
+          2.463342828147544
+        ],
+        "ego_vel": 0.03529575785618003,
+        "other_id": "26686",
+        "other_type": "ObjectType.VEHICLE",
+        "other_state": [
+          -1038.3897705078125,
+          2078.7236328125,
+          7.459353923797607,
+          2.4854726791381836
+        ],
+        "collision_msg": "Collision with vehicle ID:26686"
+      }
+    ],
+    "first_collision": {
+      "timestamp": 10.199999999999871,
+      "frame_idx": 510,
+      "ego_state": [
+        -1041.471348637373,
+        2081.9080591023744,
+        0.03529575785618003,
+        2.463342828147544
+      ],
+      "ego_vel": 0.03529575785618003,
+      "other_id": "26686",
+      "other_type": "ObjectType.VEHICLE",
+      "other_state": [
+        -1038.3897705078125,
+        2078.7236328125,
+        7.459353923797607,
+        2.4854726791381836
+      ],
+      "collision_msg": "Collision with vehicle ID:26686"
+    },
+    "trigger_distance_m": 5.5,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": 8.159999999999915,
+    "pedestrian_speed_ms": 2.0,
+    "elapsed_s": 941.1
+  }
+]

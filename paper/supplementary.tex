@@ -1,0 +1,85 @@
+\documentclass[journal,onecolumn]{IEEEtran}
+
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{float}
+\usepackage{makecell}
+\usepackage{multirow}
+\usepackage{newtxtext,newtxmath}
+\usepackage{siunitx}
+\usepackage[hidelinks]{hyperref}
+
+\hypersetup{
+  pdftitle={Supplementary Material for PA-LOI: A Proactive Risk Layer for Occluded Pedestrian Emergence},
+  pdfauthor={Hongyu Peng; Shangqi Zhang; Bo Chen; Xiao Wang}
+}
+
+\sisetup{detect-all=true}
+\renewcommand{\thetable}{S\arabic{table}}
+
+\title{Supplementary Material for ``PA-LOI: A Proactive Risk Layer for Occluded Pedestrian Emergence''}
+\author{Hongyu~Peng, Shangqi~Zhang, Bo~Chen, and Xiao~Wang}
+
+\begin{document}
+\maketitle
+
+\section{Literature Positioning}
+
+Table~\ref{tab:related-comparison} complements the main-paper discussion by
+comparing hidden-risk representation, planner coupling, evaluation scale, and
+the availability of fixed hazard geometry. The entries are qualitative because
+the cited systems use different planners and scenario definitions.
+
+\input{tables/related_comparison.tex}
+
+\section{Extended Trigger-Distance Results}
+
+Table~\ref{tab:extended-distance} reports every distance--speed cell from the
+extended moving-pedestrian protocol summarized in Section~V-E of the main
+paper. The original per-run records are included in the accompanying
+reproducibility archive.
+
+\input{tables/extended_distance.tex}
+
+\section{Risk-Layer Parameter Perturbations}
+
+Table~\ref{tab:param-ablation} reports the six one-dimensional perturbations
+summarized in Section~V-F of the main paper. The deployed setting is repeated
+to make the safety--efficiency changes directly auditable.
+
+\input{tables/param_ablation.tex}
+
+\section{Unfiltered Candidate-Pool Audit}
+
+The AV2 search returned 90 new geometric candidates. Two lacked complete
+three-stack screening records and were not used; 60 of the remaining 88 form
+new60, while 28 were screened out by the protocol-integrity checks described
+in Section~IV-B. Table~\ref{tab:candidate-pool-audit} removes this clean-scene
+filter and retains all 88 log-complete candidates. The strict 650-frame
+evaluable-set rule is applied exactly as in the main paper, background
+collisions remain unsafe, and non-spawning is exposed by the spawn rate rather
+than credited as safety. This is intentionally a harsher, confounded pool: the
+absolute rates fall, but PA-LOI's ordering over AEB-only and MIND remains. The
+scene-clustered 95\% intervals for low severity are $[43.0,61.4]$, $[9.1,22.8]$,
+and $[1.0,9.2]$, respectively. The archive gives all 90 membership decisions
+and task-level screening flags; no mutually exclusive exclusion reasons are
+assigned retrospectively because flags can overlap.
+
+\input{tables/candidate_pool_audit.tex}
+
+\section{Conference-to-Journal Extension}
+
+Table~\ref{tab:conference-delta} makes the extension beyond the accepted ITSC
+paper explicit~\cite{paloi_itsc2026}. The risk-layer algorithm is not presented
+as new in this journal submission; the new contribution is the question and
+evidence enabled by clean81, the five-system comparison, exposure accounting,
+robustness protocols, statistical analysis, and auditable release.
+
+\input{tables/conference_extension_delta.tex}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

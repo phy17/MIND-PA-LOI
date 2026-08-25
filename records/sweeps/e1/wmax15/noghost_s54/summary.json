@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-07-20T05:59:01",
+  "experiment_type": "no_ghost_efficiency",
+  "seq_id": "f14a94fd-a7ae-40d8-a54d-d0f38ebaf4ba",
+  "jsonl": "sweep_results/records/scene54.jsonl",
+  "record_index": 45,
+  "clean21_index": null,
+  "baseline": "ours",
+  "enable_ghost_probe": true,
+  "enable_aeb": true,
+  "baseline_mode": null,
+  "ghost_injected": false,
+  "ghost_spawned": false,
+  "sim_horizon": 650,
+  "control_start_frame": 200,
+  "completed_full_horizon": false,
+  "terminated": true,
+  "planner_failure_frame": 630,
+  "collision_count_ground_truth": 1,
+  "first_collision": {
+    "timestamp": 12.59999999999982,
+    "frame_idx": 630,
+    "ego_state": [
+      3884.204093612886,
+      2432.007301817973,
+      7.549383283130425,
+      -0.996433156540914
+    ],
+    "ego_vel": 7.549383283130425,
+    "other_id": "PLANNER_CRASH",
+    "other_type": "ERROR",
+    "other_state": [],
+    "collision_msg": "Planner crashed (NaNs/Failed optimization)."
+  },
+  "collision_log": [
+    {
+      "timestamp": 12.59999999999982,
+      "frame_idx": 630,
+      "ego_state": [
+        3884.204093612886,
+        2432.007301817973,
+        7.549383283130425,
+        -0.996433156540914
+      ],
+      "ego_vel": 7.549383283130425,
+      "other_id": "PLANNER_CRASH",
+      "other_type": "ERROR",
+      "other_state": [],
+      "collision_msg": "Planner crashed (NaNs/Failed optimization)."
+    }
+  ],
+  "planner_log_path": null,
+  "planner_logger_collision_count": null,
+  "planner_logger_frame_count": null,
+  "frame_log_csv": "sweep_results/e1/wmax15/noghost_s54/frame_log.csv",
+  "elapsed_s": 1291.328,
+  "wall_fps": 0.4886,
+  "n_frames": 631,
+  "avg_speed_all_mps": 7.07890968304279,
+  "avg_speed_control_mps": 5.6549159164733185,
+  "min_speed_all_mps": 0.0,
+  "max_speed_all_mps": 11.02858,
+  "final_speed_mps": 7.54938,
+  "distance_all_m": 89.47120037248655,
+  "distance_control_m": 48.59438770415781,
+  "slow_pct_all_lt6": 45.64183835182251,
+  "slow_pct_control_lt6": 64.50116009280742,
+  "stop_pct_control_lt0p3": 0.0
+}

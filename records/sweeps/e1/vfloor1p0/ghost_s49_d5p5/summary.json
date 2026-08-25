@@ -1,0 +1,65 @@
+[
+  {
+    "scene_label": "scene_abf2b022",
+    "seq_id": "abf2b022-4e59-4c04-8fb4-c267f759980e",
+    "output_dir": "sweep_results/e1/vfloor1p0/ghost_s49_d5p5/scene_abf2b022_abf2b022_ours",
+    "video_path": "sweep_results/e1/vfloor1p0/ghost_s49_d5p5/scene_abf2b022_abf2b022_ours/abf2b022-4e59-4c04-8fb4-c267f759980e_ours_vfloor1p0_d5p5_ic.mov",
+    "overview_png": null,
+    "baseline": "ours",
+    "enable_ghost_probe": true,
+    "enable_aeb": true,
+    "baseline_mode": null,
+    "ghost_spawned": true,
+    "ghost_spawn_mode": "instant_center",
+    "collision_count": 1,
+    "collision_log": [
+      {
+        "timestamp": 7.639999999999925,
+        "frame_idx": 382,
+        "ego_state": [
+          -585.864200831076,
+          1177.5263568696978,
+          2.5396680640888647,
+          -0.17984407214784318
+        ],
+        "ego_vel": 2.5396680640888647,
+        "other_id": "44401",
+        "other_type": "ObjectType.VEHICLE",
+        "other_state": [
+          -582.934814453125,
+          1175.0760498046875,
+          6.44038060373459e-17,
+          -0.07585909217596054
+        ],
+        "collision_msg": "Collision with vehicle ID:44401"
+      }
+    ],
+    "first_collision": {
+      "timestamp": 7.639999999999925,
+      "frame_idx": 382,
+      "ego_state": [
+        -585.864200831076,
+        1177.5263568696978,
+        2.5396680640888647,
+        -0.17984407214784318
+      ],
+      "ego_vel": 2.5396680640888647,
+      "other_id": "44401",
+      "other_type": "ObjectType.VEHICLE",
+      "other_state": [
+        -582.934814453125,
+        1175.0760498046875,
+        6.44038060373459e-17,
+        -0.07585909217596054
+      ],
+      "collision_msg": "Collision with vehicle ID:44401"
+    },
+    "trigger_distance_m": 5.5,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": 6.979999999999939,
+    "pedestrian_speed_ms": 2.0,
+    "elapsed_s": 1000.3
+  }
+]

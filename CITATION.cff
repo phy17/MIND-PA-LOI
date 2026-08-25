@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use these artifacts, please cite the PA-LOI manuscript and this repository."
+title: "PA-LOI: A Proactive Risk Layer for Occluded Pedestrian Emergence"
+type: software
+authors:
+  - family-names: Peng
+    given-names: Hongyu
+  - family-names: Zhang
+    given-names: Shangqi
+  - family-names: Chen
+    given-names: Bo
+  - family-names: Wang
+    given-names: Xiao
+repository-code: "https://github.com/phy17/MIND-PA-LOI"
+license: GPL-3.0-only
+date-released: 2026-08-25
+version: "1.0-submission"
+keywords:
+  - autonomous driving
+  - occluded pedestrians
+  - motion planning
+  - intelligent transportation systems
+  - reproducibility

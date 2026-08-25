@@ -1,0 +1,28 @@
+\begin{table*}[t]
+\caption{Pedestrian-Speed Sensitivity on the Representative 27-Scene Set at 5.5\,m Trigger Distance. Best Low-Severity and Impact-Energy Values per Speed in Bold.}
+\label{tab:speed-sensitivity}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{8pt}
+\begin{tabular}{clcccccc}
+\toprule
+\makecell{Speed\\(m/s)} & Method & Low-severity & Zero collision & \makecell{Low-speed\\contacts} & \makecell{High-impact\\collisions} & \makecell{Mean $v_{\mathrm{imp}}$\\(hit-only, m/s)} & \makecell{Mean $v_{\mathrm{imp}}^2$\\(hit-only, m$^2$/s$^2$)} \\
+\midrule
+\multirow{3}{*}{1.0} & PA-LOI + AEB & \textbf{26/27 (96.3\%)} & 7/27 (25.9\%) & 8 & 1 & 1.25 & \textbf{2.21} \\
+ & AEB-only & 22/27 (81.5\%) & 0/27 (0.0\%) & 10 & 5 & 1.74 & 5.14 \\
+ & MIND & 6/27 (22.2\%) & 4/27 (14.8\%) & 0 & 17 & 5.08 & 28.44 \\
+\midrule
+\multirow{3}{*}{1.5} & PA-LOI + AEB & \textbf{26/27 (96.3\%)} & 11/27 (40.7\%) & 7 & 1 & 1.17 & \textbf{2.88} \\
+ & AEB-only & 18/27 (66.7\%) & 4/27 (14.8\%) & 4 & 9 & 2.58 & 9.80 \\
+ & MIND & 3/27 (11.1\%) & 0/27 (0.0\%) & 0 & 23 & 5.22 & 29.39 \\
+\midrule
+\multirow{3}{*}{2.0} & PA-LOI + AEB & \textbf{26/27 (96.3\%)} & 17/27 (63.0\%) & 3 & 1 & 1.66 & \textbf{4.88} \\
+ & AEB-only & 17/27 (63.0\%) & 3/27 (11.1\%) & 4 & 10 & 2.84 & 11.58 \\
+ & MIND & 3/27 (11.1\%) & 0/27 (0.0\%) & 0 & 24 & 5.18 & 29.04 \\
+\midrule
+\multirow{3}{*}{3.0} & PA-LOI + AEB & \textbf{26/27 (96.3\%)} & 16/27 (59.3\%) & 5 & 1 & 1.43 & \textbf{4.26} \\
+ & AEB-only & 17/27 (63.0\%) & 4/27 (14.8\%) & 4 & 10 & 2.99 & 12.87 \\
+ & MIND & 3/27 (11.1\%) & 0/27 (0.0\%) & 1 & 24 & 5.13 & 28.97 \\
+\bottomrule
+\end{tabular}
+\end{table*}

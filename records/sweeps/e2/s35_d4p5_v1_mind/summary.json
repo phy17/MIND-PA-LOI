@@ -1,0 +1,80 @@
+[
+  {
+    "scene_label": "scene_13b0afee",
+    "seq_id": "13b0afee-a293-4ff1-9750-a2b965da547f",
+    "output_dir": "sweep_results/e2/s35_d4p5_v1_mind/scene_13b0afee_13b0afee_mind",
+    "video_path": "sweep_results/e2/s35_d4p5_v1_mind/scene_13b0afee_13b0afee_mind/13b0afee-a293-4ff1-9750-a2b965da547f_mind_dash_v1_d4p5.mov",
+    "overview_png": null,
+    "baseline": "mind",
+    "enable_ghost_probe": false,
+    "enable_aeb": false,
+    "baseline_mode": null,
+    "ghost_spawned": true,
+    "ghost_spawn_mode": "dash",
+    "collision_count": 2,
+    "collision_log": [
+      {
+        "timestamp": 9.719999999999882,
+        "frame_idx": 486,
+        "ego_state": [
+          3445.0604398054693,
+          1448.307911266565,
+          5.161240367792159,
+          1.4436323391802393
+        ],
+        "ego_vel": 5.161240367792159,
+        "other_id": "GHOST_001",
+        "other_type": "ObjectType.PEDESTRIAN",
+        "other_state": [
+          3446.404296875,
+          1448.71484375,
+          1.0,
+          3.116708278656006
+        ],
+        "collision_msg": "Collision with pedestrian ID:GHOST_001"
+      },
+      {
+        "timestamp": 12.799999999999816,
+        "frame_idx": 640,
+        "ego_state": [
+          3445.2397631902168,
+          1465.1626407724013,
+          6.341616709223481,
+          2.169088039787935
+        ],
+        "ego_vel": 6.341616709223481,
+        "other_id": "PLANNER_CRASH",
+        "other_type": "ERROR",
+        "other_state": [],
+        "collision_msg": "Planner crashed (NaNs/Failed optimization)."
+      }
+    ],
+    "first_collision": {
+      "timestamp": 9.719999999999882,
+      "frame_idx": 486,
+      "ego_state": [
+        3445.0604398054693,
+        1448.307911266565,
+        5.161240367792159,
+        1.4436323391802393
+      ],
+      "ego_vel": 5.161240367792159,
+      "other_id": "GHOST_001",
+      "other_type": "ObjectType.PEDESTRIAN",
+      "other_state": [
+        3446.404296875,
+        1448.71484375,
+        1.0,
+        3.116708278656006
+      ],
+      "collision_msg": "Collision with pedestrian ID:GHOST_001"
+    },
+    "trigger_distance_m": 4.5,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": 8.919999999999899,
+    "pedestrian_speed_ms": 1.0,
+    "elapsed_s": 859.6
+  }
+]

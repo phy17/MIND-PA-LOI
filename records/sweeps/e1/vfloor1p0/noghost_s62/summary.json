@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-07-20T03:45:51",
+  "experiment_type": "no_ghost_efficiency",
+  "seq_id": "16e57601-8355-46fd-88f4-1f66aaf49801",
+  "jsonl": "sweep_results/records/scene62.jsonl",
+  "record_index": 62,
+  "clean21_index": null,
+  "baseline": "ours",
+  "enable_ghost_probe": true,
+  "enable_aeb": true,
+  "baseline_mode": null,
+  "ghost_injected": false,
+  "ghost_spawned": false,
+  "sim_horizon": 650,
+  "control_start_frame": 200,
+  "completed_full_horizon": true,
+  "terminated": false,
+  "planner_failure_frame": null,
+  "collision_count_ground_truth": 1,
+  "first_collision": {
+    "timestamp": 12.819999999999816,
+    "frame_idx": 641,
+    "ego_state": [
+      2862.4327323174434,
+      1539.1043305285557,
+      2.73415524307781,
+      -1.0052535599987917
+    ],
+    "ego_vel": 2.73415524307781,
+    "other_id": "844",
+    "other_type": "ObjectType.VEHICLE",
+    "other_state": [
+      2861.378662109375,
+      1536.7427978515625,
+      0.0,
+      -0.8263651132583618
+    ],
+    "collision_msg": "Collision with vehicle ID:844"
+  },
+  "collision_log": [
+    {
+      "timestamp": 12.819999999999816,
+      "frame_idx": 641,
+      "ego_state": [
+        2862.4327323174434,
+        1539.1043305285557,
+        2.73415524307781,
+        -1.0052535599987917
+      ],
+      "ego_vel": 2.73415524307781,
+      "other_id": "844",
+      "other_type": "ObjectType.VEHICLE",
+      "other_state": [
+        2861.378662109375,
+        1536.7427978515625,
+        0.0,
+        -0.8263651132583618
+      ],
+      "collision_msg": "Collision with vehicle ID:844"
+    }
+  ],
+  "planner_log_path": null,
+  "planner_logger_collision_count": null,
+  "planner_logger_frame_count": null,
+  "frame_log_csv": "sweep_results/e1/vfloor1p0/noghost_s62/frame_log.csv",
+  "elapsed_s": 913.284,
+  "wall_fps": 0.7117,
+  "n_frames": 650,
+  "avg_speed_all_mps": 2.7049515076923076,
+  "avg_speed_control_mps": 2.2597532,
+  "min_speed_all_mps": 1.49243,
+  "max_speed_all_mps": 4.83201,
+  "final_speed_mps": 2.68696,
+  "distance_all_m": 34.57154443874953,
+  "distance_control_m": 20.2840406117599,
+  "slow_pct_all_lt6": 100.0,
+  "slow_pct_control_lt6": 100.0,
+  "stop_pct_control_lt0p3": 0.0
+}

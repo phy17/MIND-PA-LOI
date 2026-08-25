@@ -1,0 +1,57 @@
+{
+  "selection_flow": {
+    "geometric_candidates": 90,
+    "complete_strict650_records": 88,
+    "incomplete_record_scenes": [
+      18,
+      38
+    ],
+    "selected_new60": 60,
+    "screened_out_but_log_complete": 28
+  },
+  "accounting": "strict-650 evaluable set; scene-filter-free candidate-pool audit",
+  "metrics": {
+    "ours": {
+      "tasks": 528,
+      "spawned": 390,
+      "evaluable": 348,
+      "low": 182,
+      "low_scene_clustered_ci95": [
+        43.01994301994302,
+        61.42857142857143
+      ],
+      "zero": 47,
+      "background_collisions": 63,
+      "mean_impact_speed": 2.621876862182633,
+      "mean_impact_speed_squared": 10.152678412406985
+    },
+    "aeb_only": {
+      "tasks": 528,
+      "spawned": 488,
+      "evaluable": 471,
+      "low": 74,
+      "low_scene_clustered_ci95": [
+        9.148936170212766,
+        22.832980972515855
+      ],
+      "zero": 12,
+      "background_collisions": 15,
+      "mean_impact_speed": 5.244303197493595,
+      "mean_impact_speed_squared": 31.96177175863655
+    },
+    "mind": {
+      "tasks": 528,
+      "spawned": 518,
+      "evaluable": 510,
+      "low": 23,
+      "low_scene_clustered_ci95": [
+        0.9803921568627451,
+        9.215686274509803
+      ],
+      "zero": 0,
+      "background_collisions": 31,
+      "mean_impact_speed": 6.306910912165741,
+      "mean_impact_speed_squared": 42.0599862781469
+    }
+  }
+}

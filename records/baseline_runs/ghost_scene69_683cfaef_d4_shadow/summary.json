@@ -1,0 +1,65 @@
+[
+  {
+    "scene_label": "scene_683cfaef",
+    "seq_id": "683cfaef-3101-45a1-b414-4ab1a2440c01",
+    "output_dir": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene69_683cfaef_d4_shadow/scene_683cfaef_683cfaef_shadow",
+    "video_path": "实验记录/20260612_clean81_baselines_reachset_shadow_w24/runs/ghost_scene69_683cfaef_d4_shadow/scene_683cfaef_683cfaef_shadow/683cfaef-3101-45a1-b414-4ab1a2440c01_shadow_d4_instant_center.mov",
+    "overview_png": null,
+    "baseline": "shadow",
+    "enable_ghost_probe": false,
+    "enable_aeb": true,
+    "baseline_mode": "shadow",
+    "ghost_spawned": true,
+    "ghost_spawn_mode": "instant_center",
+    "collision_count": 1,
+    "collision_log": [
+      {
+        "timestamp": 12.699999999999818,
+        "frame_idx": 635,
+        "ego_state": [
+          2159.5520170091727,
+          932.2285473392203,
+          0.040140113908277465,
+          0.7069450182844748
+        ],
+        "ego_vel": 0.040140113908277465,
+        "other_id": "GHOST_001",
+        "other_type": "ObjectType.PEDESTRIAN",
+        "other_state": [
+          2161.547119140625,
+          933.93701171875,
+          0.0,
+          2.2710883617401123
+        ],
+        "collision_msg": "Collision with pedestrian ID:GHOST_001"
+      }
+    ],
+    "first_collision": {
+      "timestamp": 12.699999999999818,
+      "frame_idx": 635,
+      "ego_state": [
+        2159.5520170091727,
+        932.2285473392203,
+        0.040140113908277465,
+        0.7069450182844748
+      ],
+      "ego_vel": 0.040140113908277465,
+      "other_id": "GHOST_001",
+      "other_type": "ObjectType.PEDESTRIAN",
+      "other_state": [
+        2161.547119140625,
+        933.93701171875,
+        0.0,
+        2.2710883617401123
+      ],
+      "collision_msg": "Collision with pedestrian ID:GHOST_001"
+    },
+    "trigger_distance_m": 4.0,
+    "trigger_mode": "distance",
+    "reference_trigger_frame": null,
+    "reference_trigger_frame_raw": null,
+    "ghost_spawn_time_s": 11.359999999999847,
+    "pedestrian_speed_ms": 2.0,
+    "elapsed_s": 1128.3
+  }
+]
